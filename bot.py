@@ -412,5 +412,5 @@ if __name__ == "__main__":
     if not COOKIE:
         print("Set COOKIE env var to your Facebook appState JSON")
         exit(1)
-client = KlerkBot("", "", session_cookies=json.loads(COOKIE))
+client = KlerkBot(session_cookies=json.loads(COOKIE))
 client.listen()
