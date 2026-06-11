@@ -415,8 +415,11 @@ if __name__ == "__main__":
 import json
 
 class KlerkBot(Client):
-    def _login(self, email, password):
-        pass
+    def login(self, email, password, max_tries=1, user_agent=None):
+        
+        self._state = self._State()
+        self._state.session.cookies.update(json.loads(COOKIE))
+        return True
 
-client = KlerkBot(None, None, session_cookies=json.loads(COOKIE))
+client = KlerkBot("x", "x")
 client.listen()
