@@ -416,6 +416,7 @@ import json
 
 class KlerkBot(Client):
     def _login(self, email, password):
+        pass
 
 client = KlerkBot("x", "x", session_cookies=json.loads(COOKIE))
 client.listen()
