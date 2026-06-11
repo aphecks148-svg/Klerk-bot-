@@ -421,7 +421,7 @@ COOKIE = os.getenv("COOKIE")
 class KlerkBot(Client):
     def login(self, email, password, max_tries=1, user_agent=None):
         
-        self._state = self._ClientState()
+        self._state = getattr(Client, "_ClientState")()
         self._state.session.cookies.update(json.loads(COOKIE))
         self._logged_in = True
         self.uid = self._state.user_id
