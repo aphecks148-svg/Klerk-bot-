@@ -414,9 +414,18 @@ if __name__ == "__main__":
         exit(1)
 import json
 import os
-from fbchat import SessionClient
+from fbchat import Client
 
 COOKIE = os.getenv("COOKIE")
 
-client = SessionClient(session_cookies=json.loads(COOKIE))
+class KlerkBot(Client):
+    def login(self, email, password, max_tries=1, user_agent=None):
+        
+        self._state = self._ClientState()
+        self._state.session.cookies.update(json.loads(COOKIE))
+        self._logged_in = True
+        self.uid = self._state.user_id
+        return True
+
+client = KlerkBot("", "")
 client.listen()
