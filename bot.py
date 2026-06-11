@@ -413,14 +413,10 @@ if __name__ == "__main__":
         print("Set COOKIE env var to your Facebook appState JSON")
         exit(1)
 import json
+import os
+from fbchat import SessionClient
 
-class KlerkBot(Client):
-    def login(self, email, password, max_tries=1, user_agent=None):
-        
-        self._state = self._ClientState()
-        self._state.session.cookies.update(json.loads(COOKIE))
-        self.uid = self._state.user_id
-        return True
+COOKIE = os.getenv("COOKIE")
 
-client = KlerkBot("x", "x")
+client = SessionClient(session_cookies=json.loads(COOKIE))
 client.listen()
