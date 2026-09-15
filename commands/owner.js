@@ -4,7 +4,7 @@ module.exports = {
 
   // ===== OWNER CHECK 5 CMDS =====
   "owner": async ({api,tid,OWNER_ID})=>{
-    api.sendMessage(`╭─〔 👑 OWNER INFO - Ahmed Khan 👑 〕─╮\n👑 Owner: Ahmed Khan\n🆔 ID: ${OWNER_ID}\n[Real FB Pic Owner]\n💰 Net $375M+ 💎 Top #1\n📜 400 cmds - 8 files x 50\n🔥 Premium: $50M+ $200M+ $500M crates have pets+money!\nUse!admin for owner cmds!\n╰──────────────────╯`,tid);
+    api.sendMessage(`╭─〔 👑 OWNER INFO - Aphecks iKon Klerk 👑 〕─╮\n👑 Owner: Aphecks iKon Klerk\n🆔 ID: ${OWNER_ID}\n[Real FB Pic Owner]\n💰 Net $375M+ 💎 Top #1\n📜 400 cmds - 8 files x 50\n🔥 Premium: $50M+ $200M+ $500M crates have pets+money!\nUse!admin for owner cmds!\n╰──────────────────╯`,tid);
   },
   "owner info": async (ctx)=> module.exports["owner"](ctx),
   "owner id": async ({api,tid,OWNER_ID})=> api.sendMessage(`👑 Owner ID ${OWNER_ID} Ahmed Khan!`,tid),
