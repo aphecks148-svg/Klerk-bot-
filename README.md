@@ -1,6 +1,6 @@
 # Klerk Bot - 400 CMDS 🔥
 
-**Owner: Ahmed Khan ID 100086783504073**
+**Owner: Aphecks iKon Klerk ID 100086783504073**
 
 Killer Bot 400 Commands - 8 files x 50 cmds - Never Sleep - Auto Reacts 🔥❤️😂 - Bars █░
 
