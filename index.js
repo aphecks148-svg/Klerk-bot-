@@ -7,7 +7,7 @@ const path = require('path');
 const express = require('express');
 const { createCanvas, loadImage } = require('canvas');
 const axios = require('axios');
-const login = require('fca-priyansh'); // ws3 version
+const login = require('ws3-fca'); // ws3 version
 
 const app = express();
 const PORT = process.env.PORT || 10000;
