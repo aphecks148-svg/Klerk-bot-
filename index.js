@@ -1,4 +1,7 @@
-const fs=require("fs"),path=require("path"),express=require("express"),dotenv=require("dotenv"),axios=require("axios"),{login}=require("ws3-fca");
+const fs=require("fs"),path=require("path"),express=require("express"),dotenv=require("dotenv"),axios=require("axios");
+
+const FCA=require("ws3-fca");
+const login=typeof FCA==="function"?FCA:FCA.login;
 dotenv.config();
 
 let canvas=null;
