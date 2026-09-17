@@ -1,35 +1,30 @@
-const fs=require("fs"),path=require("path"),express=require("express"),dotenv=require("dotenv"),axios=require("axios");
+const fs=require("fs"),path=require("path"),express=require("express"),dotenv=require("dotenv");
 dotenv.config();
 
-const FCA=require("ws3-fca");
-const login=typeof FCA==="function"?FCA:FCA.login;
-
+const FCA=require("ws3-fca"),login=typeof FCA==="function"?FCA:FCA.login;
 const ADMIN_ID=String(process.env.ADMIN_ID||"100086783504073");
 const PORT=Number(process.env.PORT||1000);
 const APPSTATE_FILE=path.join(__dirname,"appstate.json");
 const CONFIG_FILE=path.join(__dirname,"bot-config.json");
 
-let api=null,commands=new Map(),profiles=new Map(),cooldowns=new Map();
+let api=null;
+const commands=new Map(),profiles=new Map(),cooldowns=new Map();
+
 let CFG={
- prefix:"!",
- botEnabled:true,
- maintenance:false,
- replies:true,
- reactions:true,
- autoReact:true,
- reactCooldown:3000,
- modules:{},
- commands:{},
- groups:{}
+ prefix:"!",botEnabled:true,maintenance:false,replies:true,
+ reactions:true,autoReact:true,reactCooldown:3000,
+ modules:{},commands:{},groups:{}
 };
 
 function loadConfig(){
  try{
-  if(fs.existsSync(CONFIG_FILE)) CFG={...CFG,...JSON.parse(fs.readFileSync(CONFIG_FILE,"utf8"))};
- }catch(e){console.log("Config load:",e.message)}
+  if(fs.existsSync(CONFIG_FILE))
+   CFG={...CFG,...JSON.parse(fs.readFileSync(CONFIG_FILE,"utf8"))};
+ }catch(e){console.log("Config:",e.message)}
 }
 function saveConfig(){
- try{fs.writeFileSync(CONFIG_FILE,JSON.stringify(CFG,null,2))}catch(e){console.log("Config save:",e.message)}
+ try{fs.writeFileSync(CONFIG_FILE,JSON.stringify(CFG,null,2))}
+ catch(e){console.log("Config save:",e.message)}
 }
 loadConfig();
 
@@ -51,24 +46,32 @@ function register(name,execute,module="general",extra={}){
 function loadCommands(){
  commands.clear();
  const dir=path.join(__dirname,"commands");
- if(!fs.existsSync(dir)){console.log("⚠️ commands folder missing");return}
+ if(!fs.existsSync(dir)){
+  console.log("❌ commands folder missing");
+  return;
+ }
+
  const files=fs.readdirSync(dir)
   .filter(f=>/^cmds_\d+\.js$/i.test(f))
   .sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]));
 
  for(const file of files){
   try{
-   delete require.cache[require.resolve(path.join(dir,file))];
-   const mod=require(path.join(dir,file));
+   const full=path.join(dir,file);
+   delete require.cache[require.resolve(full)];
+   const mod=require(full);
    const add=(n,c,m,e)=>register(n,c,m,e);
+
    if(typeof mod==="function")mod(add,api,CFG);
-   else if(Array.isArray(mod))mod.forEach(x=>register(x.name||x.cmd,x.execute,x.module,x));
-   else if(mod&&typeof mod==="object"){
+   else if(Array.isArray(mod))
+    mod.forEach(x=>x&&register(x.name||x.cmd,x.execute,x.module,x));
+   else if(mod&&typeof mod==="object")
     for(const [n,v] of Object.entries(mod)){
      if(typeof v==="function")register(n,v);
-     else if(v&&typeof v.execute==="function")register(n,v.execute,v.module,v);
+     else if(v&&typeof v.execute==="function")
+      register(n,v.execute,v.module,v);
     }
-   }
+
    console.log("✅ Loaded",file);
   }catch(e){console.error("❌",file,e.stack||e.message)}
  }
@@ -77,90 +80,81 @@ function loadCommands(){
 
 function send(e,msg){
  if(!e||msg===undefined||msg===null||CFG.replies===false)return;
- const text=String(msg);
- const tid=e.threadID,mid=e.messageID;
- if(!tid)return;
+ const text=String(msg),tid=e.threadID,mid=e.messageID;
+ if(!tid||!api)return;
+
  let done=false;
  const cb=err=>{
-  if(err)console.error("❌ Reply:",err.message||err);
-  else console.log("📤 Replied:",text.slice(0,70));
+  if(err)console.error("❌ Send:",err.message||err);
+  else{
+   done=true;
+   console.log("📤 Reply:",text.slice(0,80));
+  }
  };
+
  try{
-  api.sendMessage(text,tid,(err)=>{
+  api.sendMessage(text,tid,err=>{
    done=true;
    cb(err);
   },mid);
  }catch(err){
-  console.error("Direct reply failed:",err.message);
+  console.error("❌ Direct reply:",err.message);
   if(!done){
-   try{api.sendMessage(text,tid,cb)}catch(x){console.error("Send failed:",x.message)}
+   try{api.sendMessage(text,tid,cb)}
+   catch(x){console.error("❌ Normal send:",x.message)}
   }
  }
 }
 
 function react(e,emoji="👍"){
- if(!e?.messageID||!e?.threadID||CFG.reactions===false)return;
+ if(!e?.messageID||CFG.reactions===false||!api)return;
  try{
   if(typeof api.setMessageReactionMqtt==="function")
-   api.setMessageReactionMqtt(emoji,e.messageID,()=>{},true);
-  else if(typeof api.setMessageReaction==="function")
+   return api.setMessageReactionMqtt(emoji,e.messageID,()=>{},true);
+  if(typeof api.setMessageReaction==="function")
    api.setMessageReaction(emoji,e.messageID,()=>{},true);
  }catch(x){console.log("Reaction:",x.message)}
 }
 
 function profile(uid){
  uid=String(uid);
- const old=profiles.get(uid);
- if(old&&Date.now()-old.time<300000)return Promise.resolve(old.data);
+ const c=profiles.get(uid);
+ if(c&&Date.now()-c.time<300000)return Promise.resolve(c.data);
 
  return new Promise(resolve=>{
-  let finished=false;
+  let done=false;
   const fallback={uid,name:uid,vanity:uid,pic:null};
   const timer=setTimeout(()=>{
-   if(!finished){
-    finished=true;
-    resolve(fallback);
-   }
+   if(!done){done=true;resolve(fallback)}
   },2000);
 
   try{
    api.getUserInfo(uid,(err,data)=>{
-    if(finished)return;
-    finished=true;
+    if(done)return;
+    done=true;
     clearTimeout(timer);
 
-    if(err||!data||!data[uid]){
-     resolve(fallback);
-     return;
-    }
+    if(err||!data||!data[uid])return resolve(fallback);
 
-    const u=data[uid];
-    const out={
+    const u=data[uid],out={
      uid,
      name:u.name||uid,
      vanity:u.vanity||uid,
      pic:u.thumbSrc||u.profilePic||u.profileUrl||null
     };
+
     profiles.set(uid,{time:Date.now(),data:out});
     resolve(out);
    });
   }catch(e){
    clearTimeout(timer);
-   if(!finished){
-    finished=true;
-    resolve(fallback);
-   }
+   if(!done){done=true;resolve(fallback)}
   }
  });
 }
 
-function groupConfig(tid){
- return CFG.groups[String(tid)]||{};
-}
-function groupOn(tid){
- const g=groupConfig(tid);
- return g.enabled!==false;
-}
+const groupConfig=tid=>CFG.groups[String(tid)]||{};
+const groupOn=tid=>groupConfig(tid).enabled!==false;
 
 function pendingGCList(){
  return new Promise(resolve=>{
@@ -169,6 +163,10 @@ function pendingGCList(){
   }catch(e){resolve([])}
  });
 }
+
+/* =========================
+   MENU — KEPT READABLE
+========================= */
 
 function menu(){
  return `
@@ -186,10 +184,14 @@ function menu(){
 │ !buypet
 │ !sellpet
 │ !feed
+│ !water
 │ !heal
+│ !revive
 │ !petbattle
 │ !pve_hunt
 │ !arena_rank
+│ !skills
+│ !upgrade_skill
 │ !pet_breed
 │ !pet_fusion
 │ !evolve
@@ -237,6 +239,8 @@ function menu(){
 │ !crypto_wallet
 │ !crypto_exchange
 │ !market
+│ !market_buy
+│ !market_sell
 │ !auction
 │ !merchant
 ╰──────────────────────────╯
@@ -252,6 +256,16 @@ function menu(){
 │ !gta_mission_8
 │ !gta_mission_9
 │ !gta_mission_10
+│ !gta_mission_11
+│ !gta_mission_12
+│ !gta_mission_13
+│ !gta_mission_14
+│ !gta_mission_15
+│ !gta_mission_16
+│ !gta_mission_17
+│ !gta_mission_18
+│ !gta_mission_19
+│ !gta_mission_20
 │ !heist
 │ !crew_join
 │ !crew_create
@@ -292,13 +306,20 @@ function menu(){
 │ !mines
 │ !crash
 │ !cups
+│ !spin_dice
+│ !crypto_slots
+│ !diamond_mine
+│ !fortune_teller
+│ !vip_lounge
+│ !casino_rob
+│ !bet_insurance
+│ !token_exchange
+│ !gambling_lb
+│ !casino_streak
 │ !football
 │ !quiz
 │ !wrestle
 │ !event_join
-│ !arena_games
-│ !scavenger_hunt
-│ !streak_check
 ╰────────────────────────╯
 
 ╭─〔 👑 ADMIN / CONTROL 〕─╮
@@ -324,6 +345,16 @@ function menu(){
 │ !module_enable
 │ !module_disable
 │ !module_toggle
+│ !economy_enable
+│ !economy_disable
+│ !pets_enable
+│ !pets_disable
+│ !casino_enable
+│ !casino_disable
+│ !pvp_enable
+│ !pvp_disable
+│ !ai_enable
+│ !ai_disable
 │ !maintenance_on
 │ !maintenance_off
 │ !ban
@@ -357,17 +388,21 @@ function menu(){
 │ !kaiju_rage
 │ !cyborg_overlord
 │ !dragon_nest
+│ !boss_history
 │ !arena
 │ !pvp_queue
 │ !pvp_match
 │ !pvp_rank
 │ !pvp_wager
 │ !pvp_loadout
+│ !arena_hazard
 │ !dungeon
 │ !dungeon_enter
 │ !dungeon_clear
 │ !dungeon_status
 │ !dungeon_boss
+│ !dungeon_leave
+│ !dungeon_lb
 │ !raid
 │ !raid_party
 │ !raid_attack
@@ -377,22 +412,27 @@ function menu(){
 │ !coop_quest
 │ !survival_wave
 │ !merc_agency
+│ !medevac
 ╰──────────────────────╯
 
-╭─〔 🌾 WORLD / LIFE 〕─╮
+╭─〔 🌎 WORLD / LIFE 〕─╮
 │ !farm
 │ !plant
 │ !harvest
 │ !water_crop
+│ !fertilize
 │ !mine
 │ !dig
+│ !excavate
 │ !ore
 │ !fish
+│ !fishspot
 │ !cast
 │ !reel
 │ !hunt
 │ !track
 │ !scout
+│ !trap
 │ !craft
 │ !recipes
 │ !cook
@@ -418,22 +458,31 @@ function menu(){
 │ !wave
 │ !hug
 │ !highfive
+│ !handshake
 │ !laugh
+│ !cry
 │ !dance
+│ !sing
 │ !joke
 │ !story
 │ !poll
 │ !vote
 │ !question
+│ !answer
 │ !truth
 │ !dare
 │ !confess
+│ !complaint
 │ !compliment
 │ !birthday
 │ !marry
 │ !divorce
+│ !adopt
 │ !family
+│ !family_tree
 │ !relationship
+│ !breakup
+│ !date
 │ !party
 │ !event
 │ !friend_add
@@ -450,12 +499,20 @@ function menu(){
 │ !rewrite
 │ !code_assistant
 │ !ai_persona
+│ !brain_dump
 │ !generate
 │ !imagine
+│ !remix
+│ !upscale
+│ !img_to_text
+│ !avatar_gen
 │ !translate
+│ !dialect_shift
 │ !ocr_translate
 │ !audio_trans
 │ !dictionary
+│ !censor_scan
+│ !lang_pack
 │ !ai_mode
 │ !ai_config
 │ !ai_status
@@ -481,15 +538,20 @@ function menu(){
 │ !legacy_score
 │ !badge_case
 │ !perk_activate
+│ !profile_glow
 │ !stat_allocate
 │ !mastery_loop
 │ !career_level
 │ !season_pass
+│ !booster_pack
 │ !codex
 │ !tasks_daily
 │ !tasks_weekly
 │ !quests_main
 │ !quests_side
+│ !quest_inventory
+│ !faction_quest
+│ !bounty_board
 │ !milestones
 │ !achieve_hunt
 ╰──────────────────────╯
@@ -500,9 +562,9 @@ function menu(){
 │ !status
 │ !uid
 │ !me
-│ !search <command>
-│ !allcmds
 │ !profile
+│ !search <word>
+│ !allcmds <page>
 │ !ping
 │ !uptime
 │ !prefix
@@ -515,37 +577,60 @@ function menu(){
 ╰────────────────────╯
 
 ╭━━〔 💡 QUICK USE 〕━━╮
-┃ !menu 1-8 = category
+┃ !menu = full menu
+┃ !menu 1-8 = module list
 ┃ !search <word> = find commands
-┃ !allcmds = command list
+┃ !allcmds 1 = command pages
 ┃ !uid @user = Facebook UID
-┃ !profile @user = profile
+┃ !profile @user = Facebook profile
 ┃ !status = bot status
+┃ !ping = connection test
 ╰━━━━━━━━━━━━━━━━━━━━╯
 `;
 }
 
-function category(n){
- const arr=[...commands.values()].filter(c=>String(c.module||"").toLowerCase().includes(String(n).toLowerCase()));
- if(!arr.length)return `❌ No commands found for module: ${n}`;
- return `╭─〔 📚 ${n.toUpperCase()} 〕─╮\n${arr.map((c,i)=>`│ ${i+1}. ${CFG.prefix}${c.name}`).join("\n")}\n╰────────────────────╯`;
+function category(q){
+ q=norm(q);
+ const aliases={
+  "1":"pets","2":"finance","3":"crime","4":"arcade",
+  "5":"admin","6":"progression","7":"war","8":"ai"
+ };
+ q=aliases[q]||q;
+
+ const arr=[...commands.values()].filter(c=>norm(c.module).includes(q));
+
+ if(!arr.length)
+  return `❌ No commands found for "${q}".\n💡 Try ${CFG.prefix}search ${q}`;
+
+ return `╭─〔 📚 ${q.toUpperCase()} 〕─╮
+${arr.map((c,i)=>`│ ${i+1}. ${CFG.prefix}${c.name}`).join("\n")}
+╰────────────────────╯`;
 }
 
-function allCommands(){
- const a=[...commands.keys()].sort();
- const chunk=180;
- let page=Number(arguments[0]||1);
- let start=(page-1)*chunk;
- let part=a.slice(start,start+chunk);
- if(!part.length)return `❌ No commands on page ${page}.`;
- return `╭─〔 📚 ALL COMMANDS ${page} 〕─╮\n${part.map(x=>`${CFG.prefix}${x}`).join(" • ")}\n╰────────────────────────╯\n📄 Page ${page}/${Math.max(1,Math.ceil(a.length/chunk))}`;
+function allCommands(page=1){
+ page=Math.max(1,Number(page)||1);
+ const list=[...commands.keys()].sort(),perPage=100;
+ const total=Math.max(1,Math.ceil(list.length/perPage));
+ const part=list.slice((page-1)*perPage,page*perPage);
+
+ if(!part.length)return `❌ Page ${page} does not exist.\n📄 Total pages: ${total}`;
+
+ return `╭─〔 📚 ALL COMMANDS ${page}/${total} 〕─╮
+${part.map(x=>`${CFG.prefix}${x}`).join(" • ")}
+╰────────────────────────╯`;
 }
 
 function searchCommands(q){
  q=norm(q);
  if(!q)return `🔎 Usage: ${CFG.prefix}search <command>`;
- const a=[...commands.keys()].filter(x=>x.includes(q)).slice(0,80);
- return a.length?`╭─〔 🔎 SEARCH: ${q} 〕─╮\n${a.map(x=>`│ ${CFG.prefix}${x}`).join("\n")}\n╰────────────────────╯`:`❌ No command matches "${q}".`;
+
+ const found=[...commands.keys()].filter(x=>x.includes(q)).slice(0,100);
+
+ return found.length?
+ `╭─〔 🔎 SEARCH: ${q} 〕─╮
+${found.map(x=>`│ ${CFG.prefix}${x}`).join("\n")}
+╰────────────────────╯`:
+ `❌ No command matches "${q}".`;
 }
 
 async function profileMessage(uid){
@@ -565,100 +650,42 @@ async function pendingMessage(){
   x.isApproved===false||
   x.threadType==="GROUP"
  ));
+
  if(!pending.length)return "📭 No pending group chats found.";
+
  return `╭─〔 ⏳ PENDING GROUPS 〕─╮
-${pending.slice(0,30).map((x,i)=>`│ ${i+1}. ${x.name||"Unnamed"}\n│ 🆔 ${x.threadID}`).join("\n")}
+${pending.slice(0,30).map((x,i)=>
+`│ ${i+1}. ${x.name||"Unnamed"}\n│ 🆔 ${x.threadID}`
+).join("\n")}
 ╰────────────────────────╯`;
 }
 
-async function context(e,args,user){
- return {
-  api,event:e,e,args,
-  argsText:args.join(" "),
-  uid:String(e.senderID||""),
-  user,
-  name:user.name,
-  username:user.vanity,
-  profilePic:user.pic,
-  admin:ADMIN_ID,
-  isAdmin:String(e.senderID)===ADMIN_ID,
-  prefix:CFG.prefix,
-  config:CFG,
-  send:m=>send(e,m),
-  reply:m=>send(e,m),
-  react:x=>react(e,x),
-  save:saveConfig
- };
-}
+const ctx=(e,args,user)=>({
+ api,event:e,e,args,argsText:args.join(" "),
+ uid:String(e.senderID||""),user,name:user.name,
+ username:user.vanity,profilePic:user.pic,
+ admin:ADMIN_ID,isAdmin:String(e.senderID)===ADMIN_ID,
+ prefix:CFG.prefix,config:CFG,
+ send:m=>send(e,m),reply:m=>send(e,m),
+ react:x=>react(e,x),save:saveConfig
+});
 
 async function handle(e){
  try{
   if(!e||!e.body||!api)return;
 
-  const body=String(e.body).trim();
-  const prefix=CFG.prefix||"!";
+  const body=String(e.body).trim(),prefix=CFG.prefix||"!";
   if(!body.startsWith(prefix))return;
 
   const raw=body.slice(prefix.length).trim();
   if(!raw)return;
 
-  const bits=raw.split(/\s+/);
-  const name=norm(bits.shift());
-  const args=bits;
+  const bits=raw.split(/\s+/),name=norm(bits.shift()),args=bits;
+  const uid=String(e.senderID||""),isAdmin=uid===ADMIN_ID;
 
-  const uid=String(e.senderID||"");
-  const isAdmin=uid===ADMIN_ID;
-
-  if(name==="uid"||name==="me"){
-   let target=uid;
-   if(e.mentions){
-    const ids=Object.keys(e.mentions);
-    if(ids.length)target=ids[0];
-   }
-   const u=await profile(target);
-   send(e,`🆔 UID: ${u.uid}\n👤 Name: ${u.name}\n🔗 Username: ${u.vanity}`);
-   react(e,"🆔");
-   return;
-  }
-
-  if(name==="profile"){
-   let target=uid;
-   if(e.mentions){
-    const ids=Object.keys(e.mentions);
-    if(ids.length)target=ids[0];
-   }
-   send(e,await profileMessage(target));
-   return;
-  }
-
-  if(name==="menu"){
-   const n=args[0];
-   send(e,n?category(n):menu());
-   react(e,"📚");
-   return;
-  }
-
-  if(name==="allcmds"){
-   send(e,allCommands(Number(args[0]||1)));
-   return;
-  }
-
-  if(name==="search"){
-   send(e,searchCommands(args[0]));
-   return;
-  }
-
-  if(name==="help"){
-   send(e,`📖 Use ${prefix}menu to open the full command menu.\n🔎 ${prefix}search <word> to find commands.\n📚 ${prefix}allcmds <page> to browse commands.`);
-   return;
-  }
-
-  if(name==="pendinggc"){
-   if(!isAdmin){
-    send(e,"⛔ Master admin only.");
-    return;
-   }
-   send(e,await pendingMessage());
+  if(name==="ping"){
+   send(e,"🏓 Pong! Klerk Bot is alive.");
+   react(e,"🏓");
    return;
   }
 
@@ -674,8 +701,67 @@ async function handle(e){
    return;
   }
 
-  if(name==="ping"){
-   send(e,"🏓 Pong! Bot is alive.");
+  if(name==="menu"){
+   send(e,args[0]?category(args[0]):menu());
+   react(e,"📚");
+   return;
+  }
+
+  if(name==="allcmds"){
+   send(e,allCommands(args[0]));
+   return;
+  }
+
+  if(name==="search"){
+   send(e,searchCommands(args[0]));
+   return;
+  }
+
+  if(name==="help"){
+   send(e,`📖 ${prefix}menu
+🔎 ${prefix}search <word>
+📚 ${prefix}allcmds <page>
+🆔 ${prefix}uid
+👤 ${prefix}profile
+🏓 ${prefix}ping`);
+   return;
+  }
+
+  if(name==="uid"||name==="me"){
+   let target=uid;
+   if(e.mentions){
+    const ids=Object.keys(e.mentions);
+    if(ids.length)target=ids[0];
+   }
+
+   const u=await profile(target);
+
+   send(e,`╭─〔 🆔 FACEBOOK UID 〕─╮
+│ 👤 Name: ${u.name}
+│ 🆔 UID: ${u.uid}
+│ 🔗 Username: ${u.vanity}
+╰──────────────────────╯`);
+
+   react(e,"🆔");
+   return;
+  }
+
+  if(name==="profile"){
+   let target=uid;
+   if(e.mentions){
+    const ids=Object.keys(e.mentions);
+    if(ids.length)target=ids[0];
+   }
+   send(e,await profileMessage(target));
+   return;
+  }
+
+  if(name==="pendinggc"){
+   if(!isAdmin){
+    send(e,"⛔ Master admin only.");
+    return;
+   }
+   send(e,await pendingMessage());
    return;
   }
 
@@ -684,8 +770,9 @@ async function handle(e){
     send(e,"⛔ Master admin only.");
     return;
    }
+
    loadCommands();
-   send(e,`🔄 Commands reloaded.\n📚 ${commands.size} commands loaded.`);
+   send(e,`🔄 Commands reloaded!\n📚 ${commands.size} commands loaded.`);
    return;
   }
 
@@ -695,18 +782,23 @@ async function handle(e){
   }
 
   if(CFG.maintenance&&!isAdmin){
-   send(e,"🛠️ Bot is under maintenance.");
+   send(e,"🛠️ Bot is currently under maintenance.");
    return;
   }
 
   if(!groupOn(e.threadID)&&!isAdmin){
-   send(e,"🔒 This group has disabled the bot.");
+   send(e,"🔒 Bot commands are disabled in this group.");
    return;
   }
 
   const c=getCmd(name);
+
   if(!c){
-   send(e,`❓ Unknown command: ${prefix}${name}\n💡 Try ${prefix}menu or ${prefix}search ${name}`);
+   send(e,`❓ Unknown command: ${prefix}${name}
+
+💡 Try:
+${prefix}menu
+${prefix}search ${name}`);
    return;
   }
 
@@ -720,65 +812,76 @@ async function handle(e){
    return;
   }
 
-  if(CFG.maintenance&&!isAdmin){
-   send(e,"🛠️ Maintenance mode is active.");
-   return;
+  const key=`${uid}:${name}`,now=Date.now(),cd=Number(c.cooldown||0);
+
+  if(cd&&!isAdmin){
+   const until=cooldowns.get(key)||0;
+
+   if(until>now){
+    send(e,`⏳ Cooldown active.\n🕐 Try again in ${Math.ceil((until-now)/1000)}s.`);
+    return;
+   }
+
+   cooldowns.set(key,now+cd*1000);
   }
 
   if(CFG.autoReact)react(e,"👍");
 
-  const key=`${uid}:${name}`;
-  const now=Date.now();
-  const cd=Number(c.cooldown||0);
-  if(cd&&!isAdmin){
-   const until=cooldowns.get(key)||0;
-   if(until>now){
-    const left=Math.ceil((until-now)/1000);
-    send(e,`⏳ Cooldown active. Try again in ${left}s.`);
-    return;
-   }
-   cooldowns.set(key,now+cd*1000);
-  }
-
-  const user=await profile(uid);
-  const ctx=await context(e,args,user);
+  const user=await profile(uid),commandCtx=ctx(e,args,user);
 
   try{
-   if(c.execute.length<=1)await c.execute(ctx);
-   else await c.execute(api,e,args,ADMIN_ID);
+   if(c.execute.length<=1)
+    await c.execute(commandCtx);
+   else
+    await c.execute(api,e,args,ADMIN_ID);
   }catch(err){
    console.error(`❌ ${name}:`,err.stack||err.message);
-   send(e,`❌ Error running ${prefix}${name}.\n🔧 ${err.message||"Unknown error"}`);
+   send(e,`❌ Command error: ${prefix}${name}
+🔧 ${err.message||"Unknown error"}`);
   }
+
  }catch(err){
-  console.error("Handler:",err.stack||err.message);
+  console.error("❌ Handler:",err.stack||err.message);
  }
 }
 
+/* =========================
+   WEB SERVER
+========================= */
+
 const app=express();
+
 app.get("/",(req,res)=>res.send("🤖 Klerk Messenger Bot ONLINE"));
+
 app.get("/status",(req,res)=>res.json({
  online:true,
  commands:commands.size,
  uptime:process.uptime(),
  admin:ADMIN_ID
 }));
+
 app.listen(PORT,()=>console.log("🌐 Port:",PORT));
 
 function readAppState(){
  try{
   if(process.env.APPSTATE){
    const x=JSON.parse(process.env.APPSTATE);
-   return Array.isArray(x)?x:x.appState||x;
+   return Array.isArray(x)?x:(x.appState||x);
   }
+
   if(fs.existsSync(APPSTATE_FILE))
    return JSON.parse(fs.readFileSync(APPSTATE_FILE,"utf8"));
- }catch(e){console.error("Appstate:",e.message)}
+
+ }catch(e){
+  console.error("❌ Appstate:",e.message);
+ }
+
  return null;
 }
 
 function start(){
  const appState=readAppState();
+
  if(!appState){
   console.error("❌ No appstate found.");
   return;
@@ -802,6 +905,7 @@ function start(){
   }
 
   api=a;
+
   console.log("✅ Logged in!");
   console.log("👑 Master admin:",ADMIN_ID);
 
@@ -813,34 +917,76 @@ function start(){
     autoMarkRead:false,
     autoMarkDelivery:false
    });
-  }catch(e){}
+  }catch(e){console.log("Options:",e.message)}
 
-  if(api.getCurrentUserID)
+  if(typeof api.getCurrentUserID==="function")
    console.log("👤 Bot UID:",api.getCurrentUserID());
 
-  if(api.listen){
-   api.listen((err,event)=>{
-    if(err){
-     console.error("MQTT:",err);
-     return;
-    }
-    handle(event);
-   });
-   console.log("📡 MQTT listener started.");
+  const listener=
+   api.listenMqtt||
+   api.mqttListen||
+   api.listen;
+
+  if(typeof listener==="function"){
+   try{
+    listener.call(api,(err,event)=>{
+     if(err){
+      console.error("❌ MQTT:",err);
+      return;
+     }
+
+     if(event){
+      console.log(
+       "📨 EVENT:",
+       event.type||event.logMessageType||"message"
+      );
+      handle(event);
+     }
+    });
+
+    console.log("📡 MQTT listener started.");
+   }catch(e){
+    console.error("❌ MQTT listener:",e.stack||e.message);
+   }
   }else{
-   console.error("❌ api.listen unavailable.");
+   console.error("❌ No MQTT listener found.");
+   console.log(
+    "🔎 Listener methods:",
+    Object.keys(api||{})
+     .filter(x=>/listen|mqtt/i.test(x))
+     .join(", ")||"none"
+   );
   }
  };
 
  try{
-  if(login.length>=3)login(options,done);
-  else login(options).then(x=>done(null,x)).catch(done);
+  if(typeof login!=="function"){
+   console.error("❌ ws3-fca login unavailable.");
+   return;
+  }
+
+  if(login.length>=3){
+   login(options,done);
+  }else{
+   const result=login(options);
+
+   if(result&&typeof result.then==="function")
+    result.then(x=>done(null,x)).catch(done);
+   else
+    done(null,result);
+  }
+
  }catch(e){
   console.error("❌ Login exception:",e.stack||e.message);
  }
 }
 
-process.on("uncaughtException",e=>console.error("UNCAUGHT:",e.stack||e.message));
-process.on("unhandledRejection",e=>console.error("REJECTION:",e.stack||e.message));
+process.on("uncaughtException",e=>
+ console.error("🔥 UNCAUGHT:",e.stack||e.message)
+);
+
+process.on("unhandledRejection",e=>
+ console.error("🔥 REJECTION:",e.stack||e.message)
+);
 
 start();
