@@ -1,67 +1,93 @@
-const R=globalThis.__KLERK_BOT__||(globalThis.__KLERK_BOT__={}),P=R.players||(R.players=new Map()),C={};
-const U=id=>{id=String(id||"");let u=P.get(id);if(!u)u={id,cash:100000,bank:0,vault:0,savings:0,coins:100,tokens:0,xp:0,level:1,inventory:{},materials:{},equipment:{},skills:{},missions:[],guild:null,ore:[],loot:[],hp:100,maxHp:100,energy:100,maxEnergy:100};u.inventory??={};u.materials??={};u.equipment??={};u.skills??={};u.missions??=[];u.ore??=[];u.loot??=[];u.hp??=100;u.maxHp??=100;u.energy??=100;u.maxEnergy??=100;P.set(id,u);return u};
-const N=x=>String(x||"").toLowerCase().trim(),num=x=>Math.max(0,Number(String(x||"").replace(/[$,]/g,""))||0),money=n=>`$${Math.floor(n||0).toLocaleString()}`,D=(u,k,n=1)=>u.inventory[k]=(u.inventory[k]||0)+n,M=(u,k,n=1)=>u.materials[k]=(u.materials[k]||0)+n,BAR=(v,m=100,n=10)=>{let a=Math.round(Math.max(0,Math.min(m,v)/m*n));return"█".repeat(a)+"░".repeat(n-a)},XP=(c,n=100)=>{let u=U(c.uid),old=u.level;u.xp=(u.xp||0)+n;while(u.xp>=u.level*100){u.xp-=u.level*100;u.level++}return old<u.level?` 🎉 Lv.${u.level}!`:""},REWARD=(c,x=100,cash=50000,it=["🎁 Mystery Box","💎 Gem","🪙 Token"])=>{let u=U(c.uid);u.cash+=cash;it.slice(0,3).forEach(i=>D(u,i));return`💰 +${money(cash)}\n🎁 ${it.slice(0,3).join(" • ")}\n✨ +${x} XP${XP(c,x)}`};
-const target=c=>Object.keys(c.event?.mentions||{})[0]||null,mention=c=>Object.keys(c.event?.mentions||{}).length>0,add=(names,fn)=>String(names).split("|").forEach(n=>C[N(n)]={name:N(n),execute:fn,module:"combat_crafting"});
-const reqMention=c=>{if(!mention(c)){c.reply("🎯 This mode requires you to mention the player.\n💡 Example: !pvp @user");return false}return true};
-const action=(c,n)=>{let u=U(c.uid);u.energy=Math.max(0,(u.energy||100)-5);c.reply(`⚔️ ${n.toUpperCase()}\n❤️ HP ${u.hp}/${u.maxHp} ${BAR(u.hp,u.maxHp)}\n⚡ Energy ${u.energy}/${u.maxEnergy} ${BAR(u.energy,u.maxEnergy)}\n${REWARD(c,75,25000,["⚔️ Combat Token","🛡️ Battle Shard","🎁 Combat Chest"])}`)};
+const R=globalThis.__KLERK_BOT__||(globalThis.__KLERK_BOT__={}),P=R.players||(R.players=new Map());
 
-add("craft",c=>{let u=U(c.uid),item=N(c.args[0])||"iron_sword",cost=10000;if(u.cash<cost)return c.reply("❌ Need $10K.");u.cash-=cost;D(u,item);c.reply(`🔨 CRAFTED\n🧱 ${item}\n💰 -${money(cost)}\n✨ Craft successful!`)});
-add("recipe|recipes",c=>c.reply(`📜 RECIPES\n${["⚔️ Iron Sword — 2 Iron + 1 Wood","🛡️ Iron Armor — 4 Iron + 2 Leather","⛏️ Steel Pickaxe — 5 Steel + 2 Wood","🧪 Health Potion — 2 Herb + 1 Crystal","🍖 Cooked Meat — 2 Meat + 1 Herb","🏹 Hunter Bow — 3 Wood + 2 Fiber","🪄 Mana Crystal — 3 Crystal","💎 Gem Ring — 2 Gem + 1 Gold","🐾 Pet Charm — 1 Gem + 2 Fur","🔥 Fire Blade — 3 Ember + 2 Steel"].join("\n")}`));
-add("craft_weapon|craft_armor|craft_tool|craft_potion|craft_food|craft_pet_item",c=>{let n=N(c.event.body.split(/\s+/)[0].slice(1));let u=U(c.uid);D(u,n.replace("craft_",""));c.reply(`🔨 ${n.toUpperCase()}\n✅ Item crafted successfully.\n${REWARD(c,75,20000,["🧱 Material","💎 Craft Gem","🎁 Craft Box"])}`)});
-add("materials",c=>{let u=U(c.uid);c.reply(`🧱 MATERIALS\n${Object.entries(u.materials).map(([k,v])=>`• ${k}: ${v}`).join("\n")||"No materials yet."}`)});
-add("gather",c=>{let u=U(c.uid),a=["Wood","Stone","Iron","Fiber","Herb","Crystal"];let x=a[Math.floor(Math.random()*a.length)];M(u,x,Math.floor(Math.random()*5)+1);c.reply(`🌿 GATHERED ${x}\n📦 Material added.`)});
-add("workbench",c=>c.reply("🔨 WORKBENCH\n⚙️ Crafting station ready.\n💡 !recipe to view recipes."));
-add("upgrade_item|repair|dismantle|enchant|socket|gem|craft_queue",c=>{let u=U(c.uid),n=N(c.event.body.split(/\s+/)[0].slice(1));c.reply(`⚙️ ${n.toUpperCase()}\n✅ Operation completed.\n${REWARD(c,100,30000,["🔧 Upgrade Part","💎 Enhancement Gem","🎁 Gear Box"])}`)});
+const ITEMS=["💎 Crystal","🪙 Gold","🔮 Relic","🧪 Potion","⚙️ Metal","🧿 Rune","🗡️ Blade","🛡️ Armor","💠 Gem","📜 Scroll","🐉 Dragon Scale","👑 Royal Token"];
+const rand=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const uid=c=>String(c?.uid||c?.event?.senderID||"");
+const player=c=>{let id=uid(c);if(!P.has(id))P.set(id,{uid:id,name:c?.name||id,cash:0,bank:0,vault:0,savings:0,xp:0,level:1,items:{},pet:null,petSafe:false,skills:{},jobsDone:0});let p=P.get(id);p.name=c?.name||p.name;return p};
+const save=c=>{try{c?.save?.()}catch{}};
+const addItem=(p,n,q=1)=>p.items[n]=(p.items[n]||0)+q;
+const award=(c,m="Adventure")=>{let p=player(c),cash=rand(50000,250000),xp=rand(100,500),got=[];p.cash+=cash;p.xp+=xp;for(let i=0;i<3;i++){let x=pick(ITEMS);addItem(p,x);got.push(x)};let old=p.level;while(p.xp>=p.level*1000){p.xp-=p.level*1000;p.level++}save(c);return `╭━━〔 ⚔️ ${m.toUpperCase()} 〕━━╮\n│ ✅ Completed successfully!\n│ 💰 +$${cash.toLocaleString()}\n│ ⭐ +${xp} XP\n│ 🎁 ${got.join(" • ")}\n│ 📈 Level: ${old} → ${p.level}\n╰━━━━━━━━━━━━━━━━━━╯\n💡 Tip: Keep completing missions to level up!`};
+const bar=(v,max=100,n=10)=>{v=Math.max(0,Math.min(v,max));let x=Math.round(v/max*n);return"█".repeat(x)+"░".repeat(n-x)};
+const target=c=>c?.event?.mentions&&Object.keys(c.event.mentions)[0]||null;
+const requireMention=c=>{let t=target(c);if(!t){c.reply("🎯 Please mention a player.\n💡 Example: !pvp @user");return null}return t};
+const petName=p=>p.pet?.name||p.pet?.type||"your pet";
+const battle=c=>{let p=player(c),t=requireMention(c);if(!t)return;if(p.petSafe)return c.reply("🛡️ Your active pet is protected by PET SAFE.\n💡 Use !pet_safe to toggle protection.");let enemy=P.get(String(t));let ep=enemy?.pet;if(enemy&&enemy.petSafe)return c.reply("🛡️ Target's pet is protected by PET SAFE.");let dmg=rand(50,300),xp=rand(100,350),cash=rand(10000,80000);p.cash+=cash;p.xp+=xp;p.jobsDone=(p.jobsDone||0)+1;let old=p.level;while(p.xp>=p.level*1000){p.xp-=p.level*1000;p.level++}save(c);return `╭━━〔 ⚔️ PET COMBAT 〕━━╮\n│ 🐾 ${petName(p)} attacked!\n│ 🎯 Target: ${t}\n│ 💥 Damage: ${dmg}\n│ ⭐ +${xp} XP\n│ 💰 +$${cash.toLocaleString()}\n│ 📈 Level: ${old} → ${p.level}\n╰━━━━━━━━━━━━━━━━━━╯\n💡 Tip: Train your pet skills before harder battles.`};
+const generic=(c,title,desc)=>c.reply(`╭━━〔 ${title} 〕━━╮\n│ ${desc}\n╰━━━━━━━━━━━━━━━━━━╯\n💡 Tip: Complete activities to earn XP, cash and items.`);
+const missionNames=["First Steps","Lost Relic","Goblin Hunt","Mine Expedition","Dragon Hunt","Village Rescue","Ancient Ruins","Treasure Run","Forest Guardian","Cave Mystery","Bandit Camp","Royal Escort","Sea Voyage","Volcano Quest","Crystal Search","Demon Gate","Sky Temple","Void Portal","Titan Battle","Final Legend"];
+const recipes=["iron_sword","steel_sword","dragon_blade","iron_armor","steel_armor","dragon_armor","health_potion","mana_potion","energy_food","pet_treat","rune","gem"];
+const commands={};
 
-add("mine",c=>{let u=U(c.uid),ore=["Coal","Iron","Gold","Diamond","Ruby","Emerald","Sapphire","Obsidian","Mythril","Void Ore"][Math.floor(Math.random()*10)];let q=Math.floor(Math.random()*5)+1;u.ore.push(ore);M(u,ore,q);c.reply(`⛏️ MINING SUCCESS\n🪨 ${ore} x${q}\n⛏️ Pickaxe Lv.${u.pickaxe||1}\n${REWARD(c,100,35000,["⛏️ Ore Token","💎 Mining Gem","🎁 Ore Chest"])}`)});
-add("mine_enter|mine_exit|dig|excavate|ore|prospect|ore_scan|pickaxe|buy_pickaxe|upgrade_pickaxe|minecart|gem_shop",c=>{let u=U(c.uid),n=N(c.event.body.split(/\s+/)[0].slice(1));if(["buy_pickaxe","upgrade_pickaxe"].includes(n))u.pickaxe=(u.pickaxe||0)+1;c.reply(`⛏️ ${n.toUpperCase()}\n🪨 Mine system active.\n⛏️ Pickaxe Lv.${u.pickaxe||1}`)});
-add("dynamite",c=>{let u=U(c.uid),q=Math.floor(Math.random()*10)+1;M(u,"Rare Ore",q);c.reply(`💥 DYNAMITE BLAST!\n💎 Rare Ore x${q}\n${REWARD(c,125,60000,["💣 Dynamite Core","💎 Rare Gem","🎁 Blast Chest"])}`)});
-add("refine_ore|smelt|forge|blacksmith",c=>{let u=U(c.uid);D(u,"🔥 Refined Metal");c.reply(`🔥 FORGE COMPLETE\n⚙️ Refined Metal added.\n${REWARD(c,100,40000,["🔥 Forge Core","⚙️ Steel Part","💎 Forge Gem"])}`)});
+const add=(n,fn,m="combat")=>commands[n]={name:n,execute:fn,module:m};
 
-add("attack",c=>action(c,"attack"));
-add("skill",c=>action(c,"skill"));
-add("ultimate",c=>action(c,"ultimate"));
-add("damage",c=>action(c,"damage"));
-add("critical",c=>action(c,"critical"));
-add("status_effect|equipment|armor|weapon_stats|combat_log",c=>{let u=U(c.uid);c.reply(`⚔️ COMBAT STATUS\n❤️ ${u.hp}/${u.maxHp} ${BAR(u.hp,u.maxHp)}\n⚡ ${u.energy}/${u.maxEnergy} ${BAR(u.energy,u.maxEnergy)}\n🗡️ Weapon: ${u.equipment.weapon||"Basic"}\n🛡️ Armor: ${u.equipment.armor||"Basic"}`)});
-add("combat_skills|combat_stats",c=>c.reply(`⚔️ COMBAT SKILLS\n${["⚔️ Slash","🔥 Fire Strike","❄️ Ice Blast","☠️ Poison Fang","⚡ Thunder Hit","🛡️ Shield Wall","💚 Recovery","💥 Critical Strike","🌌 Void Beam","👑 Ultimate"].map((x,i)=>`${i+1}. ${x}`).join("\n")}`));
-add("defend|heal|flee",c=>{let u=U(c.uid),n=N(c.event.body.split(/\s+/)[0].slice(1));if(n==="heal")u.hp=Math.min(u.maxHp,u.hp+40);if(n==="flee")return c.reply("🏃 You escaped the battle.");c.reply(`🛡️ ${n.toUpperCase()}\n❤️ HP ${u.hp}/${u.maxHp} ${BAR(u.hp,u.maxHp)}`)});
+[
+["craft","🔨 Craft an item"],["recipe","📜 View a recipe"],["recipes","📚 View recipes"],["craft_weapon","🗡️ Craft weapon"],["craft_armor","🛡️ Craft armor"],["craft_tool","⛏️ Craft tool"],["craft_potion","🧪 Craft potion"],["craft_food","🍖 Craft food"],["craft_pet_item","🐾 Craft pet item"],["materials","🧱 View materials"],["gather","🌿 Gather materials"],["workbench","🔨 Open workbench"],["upgrade_item","⬆️ Upgrade item"],["repair","🔧 Repair item"],["dismantle","♻️ Dismantle item"],["enchant","✨ Enchant item"],["socket","🔮 Socket item"],["gem","💎 Manage gems"],["craft_queue","⏳ Craft queue"]
+].forEach(([n,d])=>add(n,c=>generic(c,"🔨 CRAFTING",d)));
 
-add("bossfight",c=>{if(!reqMention(c))return;let t=target(c);let u=U(c.uid),v=U(t);let skill=["⚔️ Slash","🔥 Fire Blast","☠️ Poison Strike","⚡ Thunder Skill","💥 Ultimate"][Math.floor(Math.random()*5)];let dmg=Math.floor(Math.random()*40)+20;v.hp=Math.max(1,v.hp-dmg);c.reply(`👹 BOSSFIGHT\n🎯 Target: ${t}\n🧠 Pet Skill: ${skill}\n💥 Damage: ${dmg}\n❤️ Target HP: ${v.hp}/${v.maxHp}\n${REWARD(c,200,100000,["👹 Boss Core","💎 Boss Gem","🎁 Boss Chest"])}`)});
-add("boss_spawn|boss_ability|boss_spectate|kaiju_rage|cyborg_overlord|dragon_nest|boss_history",c=>c.reply(`👹 BOSS SYSTEM\n🔥 ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()}\n⚔️ Legendary encounter ready.`));
+add("craft",c=>{let p=player(c),x=pick(recipes);addItem(p,x);save(c);c.reply(`🔨 Crafted **${x}** successfully!\n🧱 Materials consumed\n🎁 Item added to inventory\n💡 Use !inventory to view your items.`)},"crafting");
 
-add("arena",c=>{if(!reqMention(c))return;let t=target(c);c.reply(`🏟️ ARENA MATCH\n⚔️ Challenger: ${c.uid}\n🎯 Opponent: ${t}\n🧠 Pet skills enabled!\n🔥 Match started.`)});
-add("pvp_queue|pvp_match|pvp_rank|pvp_wager|pvp_loadout|arena_hazard|gladiator_oath",c=>{if(!reqMention(c))return;let t=target(c);c.reply(`⚔️ PVP\n🎯 Opponent: ${t}\n🧠 Pet skills enabled\n🔥 ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()} activated.`)});
-add("pvp",c=>{if(!reqMention(c))return;let t=target(c),u=U(c.uid),v=U(t),skills=["🔥 Fire Blast","⚡ Thunder Claw","☠️ Venom Strike","🛡️ Guard","💚 Heal","💥 Critical"];let s=skills[Math.floor(Math.random()*skills.length)],d=Math.floor(Math.random()*35)+15;v.hp=Math.max(1,v.hp-d);c.reply(`⚔️ PVP PET BATTLE\n👤 ${c.uid} VS ${t}\n🧠 Skill: ${s}\n💥 Damage: ${d}\n❤️ Opponent HP: ${v.hp}/${v.maxHp}`)});
+[
+["mine","⛏️ Mine for ore"],["mine_enter","🚪 Enter mine"],["mine_exit","🚪 Exit mine"],["dig","⛏️ Dig"],["excavate","🏺 Excavate"],["ore","🪨 Inspect ore"],["prospect","🔎 Prospect"],["ore_scan","📡 Scan ore"],["pickaxe","⛏️ View pickaxe"],["buy_pickaxe","🛒 Buy pickaxe"],["upgrade_pickaxe","⬆️ Upgrade pickaxe"],["minecart","🚋 Minecart"],["dynamite","💣 Blast rocks"],["gem_shop","💎 Gem shop"],["refine_ore","⚗️ Refine ore"],["smelt","🔥 Smelt"],["forge","🔥 Forge"]
+].forEach(([n,d])=>add(n,c=>generic(c,"⛏️ MINING",d),"mining"));
 
-add("dungeon",c=>{if(!reqMention(c))return;let t=target(c);c.reply(`🏰 DUNGEON\n👥 Party target: ${t}\n🧠 Pet skills enabled\n👹 Dungeon enemies spawned.\n${REWARD(c,250,125000,["🏰 Dungeon Key","💎 Dungeon Gem","🎁 Dungeon Chest"])}`)});
-add("dungeon_enter|dungeon_clear|dungeon_status|dungeon_boss|dungeon_leave|dungeon_modify|dungeon_lb",c=>c.reply(`🏰 DUNGEON SYSTEM\n⚔️ ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()}\n🗝️ Dungeon ready.`));
+add("mine",c=>{let p=player(c),ore=pick(["Iron Ore","Gold Ore","Crystal Ore","Diamond Ore","Mythril Ore"]),q=rand(1,8);addItem(p,ore,q);p.xp+=rand(50,150);save(c);c.reply(`╭━━〔 ⛏️ MINING 〕━━╮\n│ 🪨 Found: ${ore}\n│ 📦 Quantity: x${q}\n│ ⭐ Mining XP gained\n╰━━━━━━━━━━━━━━━━━━╯\n💡 Tip: Upgrade your pickaxe for rare ores.`)},"mining");
 
-add("raid",c=>{if(!reqMention(c))return;let t=target(c);c.reply(`🐉 RAID\n👥 Raid partner: ${t}\n🧠 Pet skills enabled\n🔥 Raid battle launched!\n${REWARD(c,300,150000,["🐉 Raid Core","💎 Raid Gem","🎁 Raid Chest"])}`)});
-add("raid_party|raid_attack|raid_status|raid_loot|raid_cooldown|raid_bunker|raid_hq|coop_quest|coop_trade",c=>{if(!reqMention(c))return;let t=target(c);c.reply(`🤝 CO-OP RAID\n🎯 Partner: ${t}\n⚔️ ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()}\n🔥 Team action complete.`)});
-add("co",c=>{if(!reqMention(c))return;let t=target(c);c.reply(`🤝 CO-OP PET BATTLE\n👤 ${c.uid} + ${t}\n🧠 Pet skills enabled\n⚔️ Team-up battle started!\n${REWARD(c,200,100000,["🤝 Co-op Token","💎 Team Gem","🎁 Co-op Chest"])}`)});
+[
+["attack","⚔️ Attack"],["skill","✨ Use combat skill"],["ultimate","💥 Ultimate attack"],["damage","💥 Damage info"],["critical","🎯 Critical info"],["status_effect","☠️ Status effects"],["equipment","🎒 Equipment"],["armor","🛡️ Armor"],["weapon_stats","🗡️ Weapon stats"],["combat_log","📜 Combat log"],["combat_skills","✨ Combat skills"],["combat_stats","📊 Combat stats"]
+].forEach(([n,d])=>add(n,c=>generic(c,"⚔️ COMBAT",d)));
 
-add("explore|travel|map|location|discover|camp|rest|forage|ruins|cave|island|ocean|village|city|landmark|treasure|lost_temple|secret_area|random_event|encounter|explorer_rank",c=>{let u=U(c.uid);u.energy=Math.min(u.maxEnergy,u.energy+10);c.reply(`🧭 EXPLORATION\n📍 ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()}\n⚡ Energy ${u.energy}/${u.maxEnergy}\n${REWARD(c,100,50000,["🧭 Explorer Token","💎 Discovery Gem","🎁 Explorer Chest"])}`)});
+add("attack",battle,"combat");
 
-add("use",c=>{let u=U(c.uid),i=N(c.args[0]);if(!i)return c.reply("💡 !use <item>");if(!u.inventory[i])return c.reply("❌ Item not found.");u.inventory[i]--;c.reply(`🧪 Used ${i}.`)});
-add("drop",c=>{let u=U(c.uid),i=N(c.args[0]),q=Math.max(1,num(c.args[1])||1);if(!u.inventory[i])return c.reply("❌ Item not found.");u.inventory[i]=Math.max(0,u.inventory[i]-q);c.reply(`🗑️ Dropped ${i} x${q}.`)});
-add("sort",c=>c.reply("📦 Inventory sorted."));
-add("search",c=>c.reply(`🔎 Inventory search\n💡 Use !inv or !item_info <item>.`));
-add("stash",c=>c.reply("📦 Items moved to stash."));
-add("unstash",c=>c.reply("📦 Items returned from stash."));
-add("item_info|item_value|item_history",c=>{let i=N(c.args[0])||"unknown";c.reply(`📦 ITEM INFO\n🏷️ ${i}\n💰 Value: $10,000\n⭐ Rarity: Rare\n🔧 Usable: YES`)});
+[
+["bossfight","👹 Boss Fight"],["boss_spawn","👹 Spawn Boss"],["boss_ability","💀 Boss Ability"],["boss_spectate","👁️ Spectate Boss"],["kaiju_rage","🦖 Kaiju Rage"],["cyborg_overlord","🤖 Cyborg Overlord"],["dragon_nest","🐉 Dragon Nest"],["boss_history","📜 Boss History"]
+].forEach(([n,d])=>add(n,c=>{let t=requireMention(c);if(t)generic(c,"👹 BOSS FIGHT",d)},"boss"));
 
-add("loot|lootbox|chest|open_chest|rare_drop|treasure_map|treasure_hunt|relic|artifact",c=>{let u=U(c.uid),items=["💎 Diamond","👑 Ancient Crown","⚔️ Legendary Blade","🛡️ Dragon Shield","🪙 Ancient Coin","🔮 Mystic Crystal","🐉 Dragon Scale","🌌 Void Fragment","💠 Cosmic Gem","🎁 Mystery Chest"];let i=items[Math.floor(Math.random()*items.length)];D(u,i);c.reply(`🎁 LOOT FOUND!\n${i}\n${REWARD(c,125,75000,["💎 Loot Gem","🗝️ Treasure Key","🎁 Rare Chest"])}`)});
-add("drop_rate",c=>c.reply(`🎲 DROP RATES\n${["Common 50%","Uncommon 25%","Rare 15%","Epic 7%","Legendary 2.5%","Mythic 0.5%"].join("\n")}`));
+add("bossfight",c=>{if(!requireMention(c))return;c.reply(award(c,"BOSS DEFEATED"))},"boss");
 
-const MIS=["First Steps","Lost Relic","Goblin Hunt","Mine Expedition","Dragon Hunt","Village Rescue","Ancient Ruins","Treasure Run","Forest Guardian","Cave Mystery","Bandit Camp","Royal Escort","Sea Voyage","Volcano Quest","Crystal Search","Demon Gate","Sky Temple","Void Portal","Titan Battle","Final Legend"];
-MIS.forEach((x,i)=>add(`mission_${i+1}`,c=>{let u=U(c.uid);u.missions.push(i+1);c.reply(`📜 MISSION ${i+1}/20\n🎯 ${x}\n✅ Mission accomplished!\n⭐ Level progress +100 XP\n${REWARD(c,100,75000,["🎁 Mission Item","💎 Mission Gem","🪙 Mission Token"])}`)}));
-add("mission|missions|mission_accept|mission_complete|mission_cancel|mission_reward|mission_history|contract|contract_accept|contract_complete",c=>{let u=U(c.uid);if(N(c.event.body).includes("complete")||N(c.event.body).startsWith("!mission ")){u.missions.push(Date.now());return c.reply(`📜 MISSION COMPLETE!\n${REWARD(c,150,75000,["🎁 Mission Reward","💎 Mission Gem","🪙 Mission Token"])}`)}c.reply(`📜 MISSIONS\n${MIS.map((x,i)=>`${i+1}. ${x}`).join("\n")}`)});
+[
+["arena","🏟️ Arena"],["pvp_queue","⚔️ PvP Queue"],["pvp_match","⚔️ PvP Match"],["pvp_rank","🏆 PvP Rank"],["pvp_wager","💰 PvP Wager"],["pvp_loadout","🎒 PvP Loadout"],["arena_hazard","☠️ Arena Hazard"],["gladiator_oath","🛡️ Gladiator Oath"],["pvp","⚔️ PvP"]
+].forEach(([n,d])=>add(n,c=>{let t=requireMention(c);if(t)generic(c,"🏟️ PVP / ARENA",d)},"pvp"));
 
-add("guild",c=>c.reply(`🏰 GUILD\n👤 ${c.uid}\n🏷️ Guild: ${U(c.uid).guild||"None"}\n💡 !guild_create <name>`));
-add("guild_create",c=>{let u=U(c.uid);u.guild=c.args.join(" ")||"Klerk Guild";c.reply(`🏰 Guild created: ${u.guild}`)});
-add("guild_join|guild_leave|guild_invite|guild_kick|guild_rank|guild_upgrade|guild_bank|guild_shop|guild_quest|guild_war|guild_lb",c=>{let u=U(c.uid);if(!u.guild)return c.reply("❌ Join/create a guild first.");c.reply(`🏰 GUILD ACTION\n⚔️ ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()}\n🏷️ ${u.guild}\n${REWARD(c,100,50000,["🏰 Guild Token","💎 Guild Gem","🎁 Guild Chest"])}`)});
+add("pvp",battle,"pvp");
+add("arena",battle,"pvp");
 
-add("survival_wave|merc_agency|medevac",c=>{let u=U(c.uid);u.hp=Math.min(u.maxHp,u.hp+25);c.reply(`🛡️ SURVIVAL\n🔥 ${N(c.event.body.split(/\s+/)[0].slice(1)).replace(/_/g," ").toUpperCase()}\n❤️ HP ${u.hp}/${u.maxHp}\n${REWARD(c,125,60000,["🩺 Survival Kit","🛡️ Survival Token","🎁 Survival Chest"])}`)});
+[
+["dungeon","🏰 Dungeon"],["dungeon_enter","🚪 Enter dungeon"],["dungeon_clear","🏆 Clear dungeon"],["dungeon_status","📊 Dungeon status"],["dungeon_boss","👹 Dungeon boss"],["dungeon_leave","🚪 Leave dungeon"],["dungeon_modify","🛠️ Modify dungeon"],["dungeon_lb","🏆 Dungeon leaderboard"]
+].forEach(([n,d])=>add(n,c=>{let t=requireMention(c);if(t)generic(c,"🏰 DUNGEON",d)},"dungeon"));
 
-module.exports=Object.values(C);
+add("dungeon",c=>{if(!requireMention(c))return;c.reply(award(c,"DUNGEON CLEARED"))},"dungeon");
+
+[
+["raid","☠️ Raid"],["raid_party","👥 Raid party"],["raid_attack","⚔️ Raid attack"],["raid_status","📊 Raid status"],["raid_loot","🎁 Raid loot"],["raid_cooldown","⏳ Raid cooldown"],["raid_bunker","🏰 Raid bunker"],["raid_hq","🏢 Raid HQ"],["coop_quest","🤝 Co-op quest"],["coop_trade","🤝 Co-op trade"],["co","🤝 Co-op Battle"]
+].forEach(([n,d])=>add(n,c=>{let t=requireMention(c);if(t)generic(c,"☠️ RAID / CO-OP",d)},"raid"));
+
+add("raid",c=>{if(!requireMention(c))return;c.reply(award(c,"RAID COMPLETED"))},"raid");
+add("co",c=>{if(!requireMention(c))return;c.reply(award(c,"CO-OP COMPLETED"))},"raid");
+
+[
+["explore","🗺️ Explore"],["travel","🚶 Travel"],["map","🗺️ Map"],["location","📍 Location"],["discover","🔎 Discover"],["camp","⛺ Camp"],["rest","😴 Rest"],["forage","🌿 Forage"],["ruins","🏛️ Ruins"],["cave","🕳️ Cave"],["island","🏝️ Island"],["ocean","🌊 Ocean"],["village","🏘️ Village"],["city","🏙️ City"],["landmark","📍 Landmark"],["treasure","💎 Treasure"],["lost_temple","🏛️ Lost Temple"],["secret_area","🔐 Secret Area"],["random_event","🎲 Random Event"],["encounter","⚔️ Encounter"],["explorer_rank","🏆 Explorer Rank"]
+].forEach(([n,d])=>add(n,c=>generic(c,"🗺️ EXPLORATION",d),"exploration"));
+
+[
+["use","🖐️ Use item"],["drop","🗑️ Drop item"],["sort","🔃 Sort inventory"]
+].forEach(([n,d])=>add(n,c=>generic(c,"🎒 INVENTORY",d),"inventory"));
+
+[
+["loot","🎁 Loot"],["lootbox","📦 Loot Box"],["chest","🧰 Chest"],["open_chest","🔓 Open Chest"],["rare_drop","💎 Rare Drop"],["treasure_map","🗺️ Treasure Map"],["treasure_hunt","💎 Treasure Hunt"],["relic","🔮 Relic"],["artifact","🏺 Artifact"],["drop_rate","📊 Drop Rate"]
+].forEach(([n,d])=>add(n,c=>generic(c,"🎁 LOOT",d),"loot"));
+
+missionNames.forEach((name,i)=>add(`mission_${i+1}`,c=>c.reply(award(c,`MISSION ${i+1}: ${name}`)),"missions"));
+
+[
+["mission","📜 Mission"],["missions","📚 Missions"],["mission_accept","✅ Accept mission"],["mission_complete","🏆 Complete mission"],["mission_cancel","❌ Cancel mission"],["mission_reward","🎁 Mission reward"],["mission_history","📜 Mission history"],["contract","📄 Contract"],["contract_accept","✅ Accept contract"],["contract_complete","🏆 Complete contract"]
+].forEach(([n,d])=>add(n,c=>c.reply(award(c,d)),"missions"));
+
+[
+["guild","🏰 Guild"],["guild_create","🏗️ Create guild"],["guild_join","🤝 Join guild"],["guild_leave","🚪 Leave guild"],["guild_invite","📨 Invite member"],["guild_kick","👢 Kick member"],["guild_rank","🏆 Guild rank"],["guild_upgrade","⬆️ Upgrade guild"],["guild_bank","🏦 Guild bank"],["guild_shop","🛒 Guild shop"],["guild_quest","📜 Guild quest"],["guild_war","⚔️ Guild war"],["guild_lb","🏆 Guild leaderboard"]
+].forEach(([n,d])=>add(n,c=>generic(c,"🏰 GUILD",d),"guild"));
+
+[
+["survival_wave","🌊 Survival Wave"],["merc_agency","💼 Mercenary Agency"],["medevac","🚑 Medevac"]
+].forEach(([n,d])=>add(n,c=>c.reply(award(c,d)),"survival"));
+
+module.exports=commands;
