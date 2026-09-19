@@ -272,7 +272,7 @@ c("economy_control",["econcontrol"],"Control economy","!economy_control","Admin 
 c("event_control",["events"],"Control automatic events","!event_control","Admin only",
   A("🎉 EVENT CONTROL","👹 Boss\n🧠 Quiz\n🔢 Counting\n💰 Heist\n🎁 Giveaway\n🎟️ Lottery\n💥 Crash\n🎲 Dice\n🐎 Horse\n🎊 Event\n💎 Airdrop")),
 
-c("gemini",["aiadmin"],"Configure Gemini AI","!gemini","Admin AI control",
+c("gemini_admin",["aiadmin"],"Configure Gemini AI","!gemini_admin","Admin AI control",
   A("🧠 GEMINI CONTROL","🔑 API key is read from environment configuration.\n⏱️ Quotas and cooldowns supported.")),
 
 c("canvas",["canvasstatus"],"Check Canvas engine","!canvas","Admin utility",
