@@ -3,6 +3,7 @@ const C="cmds_5";
 const c=(name,aliases,description,usage,hint,execute,permission="everyone",cooldown=0)=>({name,aliases,category:C,description,usage,hint,permission,cooldown,execute});
 const r=(reply,msg)=>reply(`🌿 WILDCORE\n━━━━━━━━━━━━━━━━\n${msg}\n━━━━━━━━━━━━━━━━\n🌾 FARM • ⛏️ MINE • 🎣 FISH • 🏹 HUNT`);
 const E=(title,msg)=>async({reply,args})=>r(reply,`${title}\n${msg.replace(/\{a\}/g,args.join(" ")||"Target")}`);
+
 module.exports=[
 c("farm",["farming"],"Farm crops","!farm","Plant and harvest crops",E("🌾 FARM","🌱 Your farm is ready!\n🌽 Crops: Wheat • Corn • Tomato\n💰 Harvest value calculated by farming engine.")),
 c("plant",["plantseed"],"Plant seeds","!plant Wheat 5","Requires seeds + farm plot",async({reply,args})=>r(reply,`🌱 PLANTING\n🌾 Seed: ${args[0]||"Wheat"}\n🔢 Amount: ${args[1]||"1"}\n⏳ Growth timer started.`)),
@@ -18,7 +19,7 @@ c("mine",["mining"],"Mine resources","!mine","Start mining",E("⛏️ MINING RUN
 c("mine_deep",["deepmine"],"Mine deeper","!mine_deep","Higher risk/reward",E("⛏️ DEEP MINE","🌑 Depth increased!\n💎 Rare ore chance increased.\n⚠️ Energy and durability consumed.")),
 c("mine_status",["minestatus"],"View mining status","!mine_status","Shows mining progress",E("📊 MINING STATUS","⛏️ Depth: 12\n⚡ Energy: 76%\n🔨 Tool durability: 84%\n💎 Rare-ore chance active.")),
 c("mine_upgrade",["upgrademine"],"Upgrade mining gear","!mine_upgrade","Better tools unlock deeper zones",E("🔨 MINING UPGRADE","⛏️ Tool upgrade requirements checked.\n💎 Better tools improve yield and depth.")),
-c("ore_sell",["sellore"],"Sell ores","!ore_sell Gold 5","Requires ores",async({reply,args})=>r(reply,`💰 ORE SALE\n💎 ${args[0]||"Ore"} × ${args[1]||"1"}\n📈 Market value calculated.`)),
+c("ore_sell",[],"Sell ores","!ore_sell Gold 5","Requires ores",async({reply,args})=>r(reply,`💰 ORE SALE\n💎 ${args[0]||"Ore"} × ${args[1]||"1"}\n📈 Market value calculated.`)),
 c("ore_market",["oremarket"],"View ore prices","!ore_market","Mining market",E("💎 ORE MARKET","🪨 Stone — $1K\n🔩 Copper — $5K\n⚙️ Iron — $10K\n🥈 Silver — $25K\n🥇 Gold — $75K\n💎 Diamond — $500K")),
 c("fish",["fishing"],"Go fishing","!fish","Catch random fish",E("🎣 FISHING TIME","🌊 Line cast!\n🐟 Sardine • Tropical Fish • Shark • Octopus • Whale\n🎁 Rare fish depend on fishing level.")),
 c("fish_cast",["cast"],"Cast fishing line","!fish_cast","Start fishing attempt",E("🎣 CAST!\n🌊 Bobber is floating...\n⏳ Wait for the bite!")),
@@ -51,7 +52,6 @@ c("fish_streak",["fishstreak"],"View fishing streak","!fish_streak","Fishing str
 c("hunt_streak",["huntstreak"],"View hunting streak","!hunt_streak","Hunting streak",E("🔥 HUNTING STREAK","🏹 Current streak: 5 days\n🎯 Accuracy bonus active.")),
 c("seedshop",["seeds"],"View seed shop","!seedshop","Buy seeds",E("🌱 SEED SHOP","🌾 Wheat\n🌽 Corn\n🍅 Tomato\n🥕 Carrot\n🍓 Strawberry\n🍇 Grape\n🌻 Sunflower\n🌙 Moonflower\n✨ Divine Seed")),
 c("buyseed",["buy_seed"],"Buy seeds","!buyseed Wheat 10","Requires money",async({reply,args})=>r(reply,`🌱 SEED PURCHASE\n🌾 ${args[0]||"Wheat"} × ${args[1]||"1"}\n💰 Price calculated by seed shop.`)),
-c("sellore",["ore_sell"],"Sell ore","!sellore Gold 5","Requires ore",async({reply,args})=>r(reply,`💎 ORE SALE\n⛏️ ${args[0]||"Ore"} × ${args[1]||"1"}\n💰 Market price calculated.`)),
 c("resourcebox",["wildbox"],"Open resource box","!resourcebox","Random Wildcore loot",E("📦 RESOURCE BOX","🌾 Seeds\n🪨 Ores\n🐟 Fish\n🍓 Wild items\n🎁 One random reward selected.")),
 c("gather_upgrade",["upgradegather"],"Upgrade gathering skill","!gather_upgrade","Improve all gathering",E("⬆️ GATHERING UPGRADE","🌿 Farming\n⛏️ Mining\n🎣 Fishing\n🏹 Hunting\n⭐ Upgrade requirements checked.")),
 c("wildrank",["gatherrank"],"View Wildcore rank","!wildrank","Gathering leaderboard",E("🏆 WILDCORE RANK","🥇 Master Gatherer\n🥈 Wilderness King\n🥉 Resource Hunter\n📊 Ranking loaded from progression engine.")),
