@@ -3,6 +3,7 @@ const C="cmds_4";
 const c=(name,aliases,description,usage,hint,execute,permission="everyone",cooldown=0)=>({name,aliases,category:C,description,usage,hint,permission,cooldown,execute});
 const r=(reply,msg)=>reply(`⚔️ WARFORGE\n━━━━━━━━━━━━━━━━\n${msg}\n━━━━━━━━━━━━━━━━\n🔥 FIGHT. SURVIVE. DOMINATE.`);
 const E=(title,msg)=>async({reply,args})=>r(reply,`${title}\n${msg.replace(/\{a\}/g,args.join(" ")||"Target")}`);
+
 module.exports=[
 c("bossfight",["boss"],"Fight active boss","!bossfight","Requires active boss",E("👹 BOSS FIGHT","🔥 Boss encounter loaded!\n⚔️ Use !attack, !defend, !skill or !ultimate.")),
 c("boss_spawn",["spawnboss"],"Spawn game boss","!boss_spawn","Event/admin boss system",E("👹 BOSS SPAWN","🌋 A boss has appeared!\n⚔️ Players can challenge the encounter.")),
@@ -40,7 +41,6 @@ c("coop_quest",["coopquest"],"Start co-op quest","!coop_quest","Requires teammat
 c("coop_trade",["cooptrade"],"Trade during co-op","!coop_trade @user","Target required",E("🔄 CO-OP TRADE","👤 Target: {a}\n📦 Trade request created.\n⏳ Target must ACCEPT.")),
 c("combat_skills",["combatskills"],"View combat skills","!combat_skills","Battle abilities",E("✨ COMBAT SKILLS","⚔️ Slash\n🔥 Fireball\n🛡️ Guard\n💨 Dash\n💥 Meteor Strike")),
 c("combat_stats",["combatstats"],"View combat stats","!combat_stats","Combat profile",E("📊 COMBAT STATS","❤️ HP\n⚔️ ATK\n🛡️ DEF\n💨 SPD\n🎯 CRIT\n🔥 POWER")),
-c("bounty_hunt",["bounty"],"Hunt game bounty","!bounty_hunt @user","Game bounty target",E("🎯 BOUNTY HUNT","👤 Target: {a}\n💰 Reward checked from bounty board.\n⚔️ Hunt is a fictional game mechanic.")),
 c("survival_wave",["survival"],"Fight survival waves","!survival_wave","Endless combat",E("🌊 SURVIVAL MODE","👹 Wave 1 incoming!\n❤️ Keep your HP above zero.\n💰 Rewards increase per wave.")),
 c("merc_agency",["mercs"],"Manage mercenaries","!merc_agency","Hire combat NPCs",E("💼 MERCENARY AGENCY","🗡️ Assault Merc\n🛡️ Guard Merc\n🎯 Sniper Merc\n💰 Hire costs calculated by combat engine.")),
 c("medevac",["medic"],"Request battle medevac","!medevac","Emergency battle support",E("🚑 MEDEVAC","🚨 Emergency extraction requested!\n❤️ Recovery process started.\n⏳ Cooldown applies."))
