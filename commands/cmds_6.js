@@ -3,6 +3,7 @@ const C="cmds_6";
 const c=(name,aliases,description,usage,hint,execute,permission="everyone",cooldown=0)=>({name,aliases,category:C,description,usage,hint,permission,cooldown,execute});
 const r=(reply,msg)=>reply(`💠 TITANMART\n━━━━━━━━━━━━━━━━\n${msg}\n━━━━━━━━━━━━━━━━\n🛒 SHOP • 🎒 ITEMS • 🔨 CRAFT • 💎 MARKET`);
 const E=(title,msg)=>async({reply,args})=>r(reply,`${title}\n${msg.replace(/\{a\}/g,args.join(" ")||"Item")}`);
+
 module.exports=[
 c("shop",["store","market"],"Open item shop","!shop","Browse items",E("🛒 TITANMART SHOP","💰 Money Items\n⚔️ Weapons\n🛡️ Armor\n🧪 Potions\n🐾 Pet Items\n🌱 Seeds\n⛏️ Tools\n🚗 Vehicle Items")),
 c("buy",["purchase"],"Buy an item","!buy Dragon Meat 2","Use item name + amount",async({reply,args})=>r(reply,`🛒 PURCHASE\n📦 Item: ${args.slice(0,-1).join(" ")||"Item"}\n🔢 Amount: ${args.at(-1)||"1"}\n💰 Price checked by shared economy engine.`)),
@@ -27,9 +28,9 @@ c("socket",["socketitem"],"Add item socket","!socket Diamond Sword","Requires so
 c("gem",["gems"],"View gems","!gem","Shows gem collection",E("💎 GEM BAG","🔴 Ruby ×4\n🔵 Sapphire ×6\n🟣 Amethyst ×3\n💎 Diamond ×12")),
 c("gemcraft",["craftgem"],"Craft gem","!gemcraft Ruby","Requires materials",E("💎 GEM FORGE","🔮 {a}\n📦 Gem materials checked.")),
 c("gem_socket",["socketgem"],"Socket gem into gear","!gem_socket Sword Ruby","Requires compatible gear",async({reply,args})=>r(reply,`💎 GEM SOCKET\n⚔️ Gear: ${args[0]||"Item"}\n🔮 Gem: ${args[1]||"Gem"}\n✨ Modifier applied if compatible.`)),
-c("weaponshop",["weapons"],"Open weapon shop","!weaponshop","Buy weapons",E("⚔️ WEAPON SHOP","🗡️ Iron Sword\n⚔️ Steel Blade\n🏹 Battle Bow\n🔱 Trident\n🔥 Flame Sword")),
-c("buyweapon",["weaponbuy"],"Buy weapon","!buyweapon Iron Sword","Requires money",E("⚔️ WEAPON PURCHASE","🗡️ {a}\n💰 Price checked by economy engine.")),
-c("weapons",["weaponlist"],"View weapons","!weapons","Owned weapons",E("⚔️ WEAPON ARMORY","🗡️ Iron Sword\n🏹 Battle Bow\n🔥 Flame Blade\n⚡ Thunder Spear")),
+
+c("weaponshop",["weaponstore"],"Open weapon shop","!weaponshop","Buy weapons",E("⚔️ WEAPON SHOP","🗡️ Iron Sword\n⚔️ Steel Blade\n🏹 Battle Bow\n🔱 Trident\n🔥 Flame Sword")),
+
 c("armor",["armors"],"View armor","!armor","Owned armor",E("🛡️ ARMOR ROOM","🛡️ Iron Armor\n🥋 Shadow Gear\n🔥 Flame Set\n🌌 Cosmic Set")),
 c("armor_shop",["buyarmor"],"Buy armor","!armor_shop Iron Armor","Requires money",E("🛡️ ARMOR SHOP","🛡️ {a}\n💰 Price checked by shop engine.")),
 c("artifact",["artifacts"],"View artifacts","!artifact","Rare equipment",E("💠 ARTIFACT VAULT","🌑 Void Ring\n☀️ Solar Crown\n🌙 Moon Relic\n🌌 Cosmic Orb")),
@@ -46,13 +47,14 @@ c("market",["globalmarket"],"Open global market","!market","Player marketplace",
 c("market_search",["finditem"],"Search marketplace","!market_search Diamond","Find listings",E("🔎 MARKET SEARCH","📦 Searching: {a}\n📋 Matching listings loaded.")),
 c("market_sell",["marketsell"],"Sell through market","!market_sell Diamond 1000000","Explicit price",async({reply,args})=>r(reply,`🏪 MARKET LISTING\n📦 ${args[0]||"Item"}\n💰 Price: ${args[1]||"amount"}\n📋 Listing submitted.`)),
 c("market_history",["saleshistory"],"View market history","!market_history","Recent transactions",E("📜 MARKET HISTORY","💰 Recent trades loaded.\n📈 Prices and completed sales displayed.")),
-c("storage",["warehouse"],"View storage","!storage","Large item storage",E("🏭 TITAN STORAGE","📦 Capacity: 500\n🎒 Used: 184\n💎 Rare items protected.")),
+
+c("storage",["storageroom"],"View storage","!storage","Large item storage",E("🏭 TITAN STORAGE","📦 Capacity: 500\n🎒 Used: 184\n💎 Rare items protected.")),
 c("storage_upgrade",["upgradestorage"],"Upgrade storage","!storage_upgrade","Increase capacity",E("🏗️ STORAGE UPGRADE","📦 Capacity expansion requirements checked.")),
 c("item_lock",["lockitem"],"Lock item","!item_lock Diamond","Prevents accidental sale",E("🔒 ITEM LOCKED","📦 {a}\n🛡️ Protected from accidental selling/trading.")),
 c("item_unlock",["unlockitem"],"Unlock item","!item_unlock Diamond","Remove protection",E("🔓 ITEM UNLOCKED","📦 {a}\n🛒 Item can now be traded or sold.")),
 c("collection",["collections"],"View item collection","!collection","Collection progress",E("📚 COLLECTION","💎 Gems: 42%\n⚔️ Weapons: 38%\n🛡️ Armor: 29%\n✨ Artifacts: 16%\n🏆 Overall: 34%")),
 c("rarity",["rarities"],"View item rarities","!rarity","Rarity guide",E("⭐ RARITY GUIDE","⚪ Common\n🟢 Uncommon\n🔵 Rare\n🟣 Epic\n🟠 Legendary\n🔴 Mythic\n💎 Divine")),
-c("itemdex",["itemdex"],"View item encyclopedia","!itemdex","All discovered items",E("📖 ITEMDEX","🔎 Search the complete TITANMART database.\n💡 !item <name> for details.")),
+c("itemdex",["itembook"],"View item encyclopedia","!itemdex","All discovered items",E("📖 ITEMDEX","🔎 Search the complete TITANMART database.\n💡 !item <name> for details.")),
 c("craftlog",["craftinglog"],"View crafting history","!craftlog","Recent crafts",E("📜 CRAFT LOG","🔨 Recent crafting activity loaded.\n⭐ Crafting XP tracked.")),
 c("shopreset",["resetshop"],"View next shop reset","!shopreset","Shop timer",E("⏳ SHOP RESET","🛒 Next rotation timer loaded.\n🔥 Rare stock can rotate after reset.")),
 c("merchant",["npcmerchant"],"Talk to merchant","!merchant","NPC shop",E("🧑‍💼 MERCHANT","👋 Welcome to TITANMART!\n💰 Special offers available.\n📦 Inventory rotates regularly.")),
