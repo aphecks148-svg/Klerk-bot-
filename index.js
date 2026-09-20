@@ -146,31 +146,32 @@ function connectMessenger(){
    const startListener=()=>{
     if(stopListener)try{stopListener()}catch(e){}
     if(heartbeat)clearInterval(heartbeat);
-    console.log("🎧 MQTT ON");
+    console.log("🎧 MQTT ON - DEBUG MODE");
     stopListener=api.listenMqtt(async(err,e)=>{
      if(err){console.log("⚠️ MQTT:",err.error||err.message||err);const crit=["Not logged in","Connection closed","Socket","MQTT","401","403","logged out"];if(crit.some(k=>String(err.error||err.message||"").includes(k))){if(stopListener)try{stopListener()}catch(x){}if(heartbeat)clearInterval(heartbeat);setTimeout(connectMessenger,5000);}return;}
      try{
+      // DEBUG EVERY EVENT
+      if(e.type==="message"){
+       console.log(`📩 MSG: from ${e.senderID} in ${e.threadID} | body: ${String(e.body||"").slice(0,100)} | isAdmin: ${ADMINS.has(String(e.senderID))} | pending: ${!!S.pending[e.threadID]}`);
+      }
+      if(e.logMessageType)console.log(`📋 LOG: ${e.logMessageType} in ${e.threadID}`);
+
       if(e.logMessageType==="log:subscribe"&&e.threadID){
        const id=String(e.threadID),g=await syncGroup(api,id);
        if(!g.approved&&!S.groups[id]){
         S.pending[id]={...g,approved:false,pendingAt:Date.now()};save();
-        console.log(`⏳ NEW PENDING: ${g.name} ${id}`);
-        for(const adminID of ADMINS)try{api.sendMessage([`⏳ NEW GC PENDING`,`👥 ${g.name}`,`🆔 ${id}`,`👤 ${g.members}`,``, `✅ ${PREFIX}approve_gc ${id}`,`❌ ${PREFIX}reject_gc ${id}`].join("\n"),adminID)}catch(x){}
+        console.log(`⏳ NEW PENDING: ${g.name} ${id} - members: ${g.members}`);
+        for(const adminID of ADMINS)try{api.sendMessage([`⏳ NEW GC PENDING`,`👥 ${g.name}`,`🆔 ${id}`,`👤 ${g.members}`,``, `✅ ${PREFIX}approve_gc ${id}`,`❌ ${PREFIX}reject_gc ${id}`].join("\n"),adminID)}catch(x){console.log("DM FAIL to admin",adminID,x.message)}
        }
       }
       if(e.type==="message"&&e.body){
-       if(e.senderID===api.getCurrentUserID())return;
+       if(e.senderID===api.getCurrentUserID()){console.log("↩️ Ignored own message");return;}
        await execute(api,e).catch(err=>console.log("EXEC",err.message));
       }
      }catch(x){console.log("EVENT",x.message)}
     });
     heartbeat=setInterval(()=>{try{if(!global.API_INSTANCE){clearInterval(heartbeat);connectMessenger();return;}api.getCurrentUserID();}catch(ex){clearInterval(heartbeat);connectMessenger();}},60000);
    };
-   startListener();
-   setInterval(()=>{const now=Date.now();if(now-lastRestart>25*60*1000){lastRestart=now;console.log("🔄 Refresh listener");startListener();}},5*60*1000);
-  });
- }catch(e){isConnecting=false;console.log("Login ex",e.message);setTimeout(connectMessenger,15000);}
-}
 
 app.get("/",(req,res)=>res.json({bot:BOT,status:"ACTIVE",commands:registry.size,groups:Object.keys(S.groups).length,pending:Object.keys(S.pending).length,uptime:process.uptime(),admins:[...ADMINS]}));
 app.get("/health",(req,res)=>res.json({ok:true,commands:registry.size,messenger:Boolean(global.API_INSTANCE),pending:Object.keys(S.pending).length}));
