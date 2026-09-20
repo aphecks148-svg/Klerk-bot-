@@ -127,7 +127,7 @@ function menu(n=0){
 register({name:"menu",aliases:["commands","cmds","helpme"],description:"Open the bot menu",run:c=>menu(c.args[0]||0)});
 register({name:"uid",aliases:["myuid"],description:"Show your Facebook UID",run:c=>box("🆔 YOUR UID",`👤 User ID\n\n🔐 ${c.uid}\n\n${random(SUCCESS)}`)});
 register({name:"ping",description:"Check bot response",run:()=>box("🏓 PONG",`🟢 ${BOT} is online!\n\n⚡ Fast response\n🔥 Systems active\n\n${random(FUNNY)}`)});
-register({name:"status",description:"Show bot status",run:()=>box("📊 BOT STATUS",["🟢 ONLINE",`📚 Commands: ${registry.size}`,`👥 Groups: ${Object.keys(S.groups).length}`,`👤 Users: ${Object.keys(S.users).length}`,`🍃 MongoDB: ${db?"CONNECTED":"LOCAL"}`,`⏱️ Uptime: ${Math.floor(process.uptime())}s`].join("\n")))});
+register({name:"status",description:"Show bot status",run:()=>box("📊 BOT STATUS",["🟢 ONLINE",`📚 Commands: ${registry.size}`,`👥 Groups: ${Object.keys(S.groups).length}`,`👤 Users: ${Object.keys(S.users).length}`,`🍃 MongoDB: ${db?"CONNECTED":"LOCAL"}`,`⏱️ Uptime: ${Math.floor(process.uptime())}s`].join("\n"))});
 
 register({name:"help",description:"Show command information",run:c=>{
  const x=getCommand(c.args[0]);if(!x)return menu();
