@@ -1,0 +1,60 @@
+const GTA=["gta_mission_1","gta_mission_2","gta_mission_3","gta_mission_4","gta_mission_5","gta_mission_6","gta_mission_7","gta_mission_8","gta_mission_9","gta_mission_10","gta_mission_11","gta_mission_12","gta_mission_13","gta_mission_14","gta_mission_15","gta_mission_16","gta_mission_17","gta_mission_18","gta_mission_19","gta_mission_20"],VEHICLES=["car","motorcycle","boat","plane","sports_car","supercar","truck","van","helicopter","jet","yacht","tank"],WEAPONS=["pistol","smg","shotgun","rifle","sniper","rpg","grenade","armor","katana","laser","plasma"],CRIME=["rob","hack","mug","bounty_hunt","scam","counterfeit","carjack","extort","loan_shark","shred_records","smuggle","blackmarket","warehouse","safehouse","bribe_cop","jail_break","infiltrate","snitch","wire_tap","informant","street_race","safe_crack","hit_list","underworld","syndicate_hq"];
+
+const pay=(c,n,x=100)=>{c.user.money=(c.user.money||0)+n;return{text:`💰 +$${n.toLocaleString()}\n⭐ +${x} XP\n🎁 Loot • Token • Bonus`,money:n,xp:x,rewards:["loot","token","bonus"]}},list=(t,a)=>async c=>({text:`${t}\n\n${a.map((x,i)=>`${i+1}. ${x}`).join("\n")}`,gameplay:false}),cmd=(name,cat,aliases=[],cash=3000)=>({name,aliases,category:cat,purpose:`${name} system`,run:async c=>pay(c,cash)});
+
+const commands=[
+{name:"gta",aliases:["gta_missions","missions"],category:"GTA",run:list("🚗 GTA MISSIONS",GTA)},
+{name:"gta_mission_1",aliases:[],category:"GTA",run:async c=>pay(c,5000,100)},
+{name:"gta_mission_2",aliases:[],category:"GTA",run:async c=>pay(c,7000,120)},
+{name:"gta_mission_3",aliases:[],category:"GTA",run:async c=>pay(c,9000,140)},
+{name:"gta_mission_4",aliases:[],category:"GTA",run:async c=>pay(c,12000,160)},
+{name:"gta_mission_5",aliases:[],category:"GTA",run:async c=>pay(c,15000,180)},
+{name:"heist",aliases:["heist_job"],category:"Crime",run:async c=>pay(c,50000,300)},
+{name:"heist_plan",aliases:["plan_heist"],category:"Crime",run:async c=>({text:"🧠 HEIST PLAN\nTarget • Crew • Entry • Escape • Loot\nUse !heist to start.",gameplay:false})},
+{name:"heist_prep",aliases:["prep_heist"],category:"Crime",run:async c=>pay(c,5000,100)},
+{name:"heist_status",aliases:["heist_info"],category:"Crime",run:async c=>({text:"🚨 HEIST STATUS\nNo active heist.",gameplay:false})},
+{name:"crew",aliases:["crew_join","crew_create","crew_info"],category:"Crime",run:async c=>({text:"👥 CREW SYSTEM\nCreate, join, recruit and manage your crime crew.",gameplay:false})},
+{name:"rob",aliases:["robbery"],category:"Crime",cooldown:300,run:async c=>pay(c,12000,150)},
+{name:"hack",aliases:["hacking"],category:"Crime",cooldown:600,run:async c=>pay(c,25000,200)},
+{name:"mug",aliases:["mugging"],category:"Crime",cooldown:180,run:async c=>pay(c,6000,100)},
+{name:"carjack",aliases:["car_jack"],category:"Crime",cooldown:300,run:async c=>pay(c,15000,150)},
+{name:"extort",aliases:["extortion"],category:"Crime",cooldown:600,run:async c=>pay(c,20000,175)},
+{name:"scam",aliases:["scamming"],category:"Crime",cooldown:900,run:async c=>pay(c,18000,150)},
+{name:"counterfeit",aliases:["fake_money"],category:"Crime",cooldown:1800,run:async c=>pay(c,30000,250)},
+{name:"smuggle",aliases:["smuggling"],category:"Crime",cooldown:1200,run:async c=>pay(c,40000,250)},
+{name:"bounty_hunt",aliases:["bountyhunt"],category:"Crime",run:async c=>pay(c,35000,250)},
+{name:"safe_crack",aliases:["safecrack"],category:"Crime",cooldown:600,run:async c=>pay(c,22000,175)},
+{name:"bribe_cop",aliases:["bribe"],category:"Crime",run:async c=>({text:"👮 Bribe attempt processed.\n🚨 Wanted/heat systems updated.",gameplay:false})},
+{name:"jail_break",aliases:["jailbreak"],category:"Crime",cooldown:1800,run:async c=>pay(c,50000,300)},
+{name:"street_race",aliases:["race"],category:"GTA",cooldown:300,run:async c=>pay(c,15000,150)},
+{name:"weapons",aliases:["weapon_shop","armory"],category:"GTA",run:list("🔫 WEAPON SHOP",WEAPONS)},
+{name:"buyweapon",aliases:["buy_weapon"],category:"GTA",run:async c=>pay(c,-5000,25)},
+{name:"vehicles",aliases:["vehicle_shop","cars"],category:"GTA",run:list("🚘 VEHICLE LIST",VEHICLES)},
+{name:"buycar",aliases:["buy_vehicle"],category:"GTA",run:async c=>pay(c,-25000,50)},
+{name:"sellcar",aliases:["sell_vehicle"],category:"GTA",run:async c=>pay(c,15000,50)},
+{name:"garage",aliases:["mygarage"],category:"GTA",run:async c=>({text:"🚗 GARAGE\nYour owned vehicles are stored here.",gameplay:false})},
+{name:"drive",aliases:["driving"],category:"GTA",run:async c=>pay(c,2500,50)},
+{name:"park",aliases:["parkcar"],category:"GTA",run:async c=>({text:"🅿️ Vehicle parked.",gameplay:false})},
+{name:"repaircar",aliases:["repair_vehicle"],category:"GTA",run:async c=>pay(c,-3000,25)},
+{name:"fuel",aliases:["refuel"],category:"GTA",run:async c=>pay(c,-1500,15)},
+{name:"carwash",aliases:["washcar"],category:"GTA",run:async c=>pay(c,-500,10)},
+{name:"modcar",aliases:["car_upgrade"],category:"GTA",run:async c=>pay(c,-5000,50)},
+{name:"vehicle_trade",aliases:["tradecar"],category:"GTA",run:async c=>({text:"🤝 Vehicle trade system ready.",gameplay:false})},
+{name:"vehicle_market",aliases:["carmarket"],category:"GTA",run:list("🚘 VEHICLE MARKET",VEHICLES)},
+{name:"race",aliases:["racing"],category:"GTA",run:async c=>pay(c,10000,100)},
+{name:"race_join",aliases:["joinrace"],category:"GTA",run:async c=>({text:"🏁 Joined the next race.",gameplay:false})},
+{name:"race_create",aliases:["createrace"],category:"GTA",run:async c=>({text:"🏁 Race created.",gameplay:false})},
+{name:"race_lb",aliases:["raceleaderboard"],category:"GTA",run:async c=>({text:"🏆 RACE LEADERBOARD\nRankings are calculated from completed races.",gameplay:false})},
+{name:"chop_shop",aliases:["chopshop"],category:"Crime",run:async c=>pay(c,12000,100)},
+{name:"blackmarket",aliases:["black_market"],category:"Crime",run:async c=>({text:"🕶️ BLACK MARKET\nWeapons • Vehicles • Contraband • Rare Items",gameplay:false})},
+{name:"warehouse",aliases:["warehouse_raid"],category:"Crime",run:async c=>pay(c,30000,200)},
+{name:"safehouse",aliases:["safe_house"],category:"Crime",run:async c=>({text:"🏠 SAFEHOUSE\nYour criminal operations base.",gameplay:false})},
+{name:"turf",aliases:["turf_claim","turf_war"],category:"Crime",run:async c=>pay(c,20000,175)},
+{name:"gang",aliases:["gang_create","gang_upgrade"],category:"Crime",run:async c=>({text:"👥 GANG SYSTEM\nCreate, upgrade and manage your gang.",gameplay:false})},
+{name:"wanted",aliases:["wanted_level"],category:"Crime",run:async c=>({text:`🚨 WANTED LEVEL\n⭐ ${c.user.wanted||0}`,gameplay:false})},
+{name:"hit_list",aliases:["hitlist"],category:"Crime",run:async c=>({text:"🎯 HIT LIST\nAvailable targets are generated by the crime engine.",gameplay:false})}
+];
+
+for(const x of GTA.slice(5))if(!commands.some(c=>c.name===x))commands.push(cmd(x,"GTA",[],5000));
+for(const x of CRIME)if(!commands.some(c=>c.name===x))commands.push(cmd(x,"Crime",[],8000));
+module.exports=commands;
