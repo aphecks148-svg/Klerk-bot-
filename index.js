@@ -1,110 +1,174 @@
 require("dotenv").config();
 const fs=require("fs"),path=require("path"),express=require("express"),axios=require("axios");
-const FCA=require("ws3-fca"),login=typeof FCA==="function"?FCA:FCA.login;
-const BOT="iKON-BOT",OWNER="Aphecks iKon Klerk";
-const PREFIX=String(process.env.PREFIX||"!").trim()||"!";
-const PORT=Number(process.env.PORT||10000);
-const APPSTATE_RAW=String(process.env.APPSTATE||"").trim();
-const RENDER_URL=process.env.RENDER_URL||process.env.RENDER_EXTERNAL_URL||"";
-const ADMINS=new Set(String(process.env.ADMIN_IDS||process.env.ADMIN_ID||"").split(",").map(x=>x.trim()).filter(Boolean));
-console.log(`👑 ADMINS: ${[...ADMINS].join(", ")||"NONE"}`);
-const app=express();app.use(express.json());
-const DATA=path.join(__dirname,"data"),FILE=path.join(DATA,"state.json");
-if(!fs.existsSync(DATA))fs.mkdirSync(DATA,{recursive:true});
-const DEFAULT={settings:{botEnabled:true,maintenance:false,reactions:true,replies:true,reactCooldown:1500,pokemonInterval:1200000},users:{},groups:{},pending:{},battles:{},cooldowns:{},pokemon:null,logs:[]};
-let S=JSON.parse(JSON.stringify(DEFAULT));
-try{if(fs.existsSync(FILE)){const x=JSON.parse(fs.readFileSync(FILE,"utf8"));S={...DEFAULT,...x,settings:{...DEFAULT.settings,...(x.settings||{})},pending:x.pending||{},groups:x.groups||{},users:x.users||{}};S.settings.botEnabled=true;S.settings.replies=true;S.settings.maintenance=false;S.settings.reactions=true;}}catch(e){}
-function save(){try{fs.writeFileSync(FILE,JSON.stringify(S,null,2))}catch(e){}}
-function getUser(uid){uid=String(uid);let u=S.users[uid]||{uid,balance:1000,bank:0,vault:0,xp:0,level:1,inventory:{},pets:[],stats:{},battles:{}};u.uid=uid;u.inventory=u.inventory||{};u.pets=u.pets||[];S.users[uid]=u;return u;}
-function saveUser(u){if(u?.uid)S.users[String(u.uid)]=u;}
-async function syncGroup(api,id){id=String(id);try{const info=await new Promise((res,rej)=>api.getThreadInfo(id,(err,data)=>err?rej(err):res(data)));const old=S.groups[id]||S.pending[id]||{};const members=info.participantIDs||[];const hasAdmin=members.some(m=>ADMINS.has(String(m)));const g={...old,threadID:id,name:info.threadName||old.name||"Unnamed",members:members.length||old.members||0,status:"ACTIVE",approved:old.approved===true||hasAdmin,updatedAt:Date.now()};if(g.approved){S.groups[id]=g;delete S.pending[id];}else if(!S.groups[id]){S.pending[id]={...g,pendingAt:Date.now()};}save();return g;}catch(e){return S.groups[id]||S.pending[id]||{threadID:id,name:"Unknown",members:0,status:"UNKNOWN",approved:false}}}
-const registry=new Map(),aliases=new Map(),dupes=[];
-function register(c,file="system"){if(!c||!c.name||typeof c.run!=="function")return;const name=String(c.name).toLowerCase().trim();if(!name)return;if(registry.has(name)){dupes.push(name);return}registry.set(name,{...c,name,module:file});for(const a of (c.aliases||[])){const x=String(a).toLowerCase().trim();if(!x||x===name||registry.has(x)||aliases.has(x))continue;aliases.set(x,name)}}
-function getCommand(n){n=String(n||"").toLowerCase().trim();return registry.get(n)||registry.get(aliases.get(n))}
-function loadCommands(){const dir=path.join(__dirname,"commands");if(!fs.existsSync(dir)){console.log("❌ commands/ missing");return}const files=[];for(let i=1;i<=8;i++){const f=`cmds_${i}.js`;if(fs.existsSync(path.join(dir,f)))files.push(f);}const extra=fs.readdirSync(dir).filter(x=>/^cmds_\d+\.js$/i.test(x)&&!files.includes(x)).sort();const all=[...files,...extra];console.log(`🔍 Found: ${all.join(", ")}`);for(const file of all){try{delete require.cache[require.resolve(path.join(dir,file))];const m=require(path.join(dir,file));const list=Array.isArray(m)?m:m.commands?Array.isArray(m.commands)?m.commands:Object.values(m.commands):Object.values(m||{});let c=0;list.forEach(x=>{const b=registry.size;register(x,file);if(registry.size>b)c++});console.log(`📦 ${file} -> ${c} | total ${registry.size}`)}catch(e){console.log(`❌ ${file}: ${e.message}`)}}console.log(`📚 FINAL: ${registry.size} cmds | Dupes: ${dupes.length}`)}
-const REACTIONS=["👍","❤️","😂","🔥","👏","😍","💯","⚡","🎉","🐉","💰","🏆","👑","🚀","✨"],random=a=>a[Math.floor(Math.random()*a.length)],reactCD=new Map(),spam=new Map(),cmdCD=new Map();
-function box(t,b,f=`🤖 ${BOT}`){return [`╭━━━〔 ${t} 〕━━━╮`,"",b,"",`╰━━━〔 ${f} 〕━━━╯`].join("\n")}
-function send(api,e,text){if(!S.settings.replies||text==null)return;try{api.sendMessage(String(text),e.threadID,(err)=>{if(err)console.log("SEND FAIL",err)},e.messageID)}catch(x){try{api.sendMessage(String(text),e.threadID)}catch(y){}}}
-function react(api,e){if(!S.settings.reactions||typeof api.setMessageReaction!=="function")return;const k=String(e.threadID),now=Date.now();if(now-(reactCD.get(k)||0)<S.settings.reactCooldown)return;reactCD.set(k,now);try{api.setMessageReaction(random(REACTIONS),e.messageID,()=>{},true)}catch(x){}}
-function parse(b){let s=String(b||"").trim();if(!s.startsWith(PREFIX))return null;s=s.slice(PREFIX.length).trim().replace(/\s+/g," ");if(!s)return null;const p=s.split(" "),name=(p.shift()||"").toLowerCase();return{name,args:p,raw:s};}
-function isAdmin(uid){return ADMINS.has(String(uid))}
-function allowed(uid,tid){const k=`${tid}:${uid}`,now=Date.now(),a=(spam.get(k)||[]).filter(x=>now-x<8000);a.push(now);spam.set(k,a);return a.length<=10;}
-function menu(n=0){n=Number(n)||0;const titles=["🤖 MAIN MENU","🐾 PET LABS","💰 FINANCE","💀 CRIME","🎮 ARCADE","🛡️ ADMIN","⭐ PROGRESSION","⚔️ WAR-ZONE","🤖 AI"];const title=titles[n>=1&&n<=8?n:0];const list=n>=1&&n<=8?[...registry.values()].filter(x=>x.module===`cmds_${n}.js`):[...registry.values()].filter(x=>x.module!=="system").slice(0,200);return ["━━━━━━━━━━━━",` ${title}`,"━━━━━━━━━━━━",`⚡ ${registry.size} cmds | 👥 ${Object.keys(S.groups).length} | ⏳ ${Object.keys(S.pending).length}`,"",...list.map(x=>`✨ ${PREFIX}${x.name}`),"","━━━━━━━━━━━━",`${PREFIX}menu 1-8 | ${PREFIX}help | ${PREFIX}pending`].join("\n");}
-register({name:"menu",aliases:["commands"],description:"Menu",run:c=>menu(c.args[0]||0)});
-register({name:"uid",description:"UID",run:c=>box("🆔 UID",`🔐 ${c.uid}`)});
-register({name:"ping",description:"Ping",run:()=>box("🏓 PONG",`🟢 ONLINE\n📚 ${registry.size} cmds\n⏱️ ${Math.floor(process.uptime())}s`)});
-register({name:"status",description:"Status",run:()=>box("📊 STATUS",`🟢 ONLINE\n📚 ${registry.size}\n👥 ${Object.keys(S.groups).length}\n⏳ ${Object.keys(S.pending).length}\n👑 ${[...ADMINS].join(",")}`)});
-register({name:"help",description:"Help",run:c=>{const x=getCommand(c.args[0]);if(!x)return menu();return box(`📖 ${PREFIX}${x.name}`,`${x.description||""}\n${x.syntax||PREFIX+x.name}`)}});
-register({name:"search",description:"Search",run:c=>{const q=c.args.join(" ").toLowerCase().trim();if(!q)return box("🔎 SEARCH",`${PREFIX}search <word>`);const r=[...registry.values()].filter(x=>`${x.name} ${x.description||""}`.toLowerCase().includes(q)).slice(0,30);if(!r.length)return box("🔎","Nothing");return box("🔎 RESULTS",r.map(x=>`✨ ${PREFIX}${x.name}`).join("\n"))}});
-register({name:"me",description:"Profile",run:c=>{const u=c.user;return box("👤 PROFILE",`🆔 ${c.uid}\n💰 $${Number(u.balance||0).toLocaleString()}\n⭐ Lvl ${u.level||1}`)}});
-register({name:"pending",aliases:["pendinglist"],permission:"admin",description:"Pending",run:()=>{const p=Object.values(S.pending);if(!p.length)return box("⏳ PENDING","✅ No pending");return box("⏳ PENDING",p.map(g=>`${g.name}\n🆔 ${g.threadID}\n✅!approve_gc ${g.threadID}`).join("\n\n"))}});
-register({name:"approve_gc",aliases:["approve"],permission:"admin",description:"Approve",run:async c=>{const id=String(c.args[0]||c.threadID).trim();const target=S.pending[id]||S.groups[id];if(!target)return box("❌","Not found "+id);target.approved=true;S.groups[id]={...target,approved:true,status:"ACTIVE"};delete S.pending[id];save();try{c.api.sendMessage(box("✅ APPROVED",`🎉 ${BOT} active! ${PREFIX}menu`),id)}catch(e){}return box("✅ APPROVED",`👥 ${target.name}\n🆔 ${id}`)}});
-register({name:"reject_gc",aliases:["reject"],permission:"admin",description:"Reject",run:c=>{const id=String(c.args[0]||"").trim();if(!id)return box("❌",`${PREFIX}reject_gc <id>`);delete S.pending[id];delete S.groups[id];save();return box("❌ REJECTED",id)}});
-register({name:"approve_all",permission:"admin",description:"Approve all",run:c=>{const ids=Object.keys(S.pending);if(!ids.length)return box("⏳","No pending");for(const id of ids){S.groups[id]={...S.pending[id],approved:true};delete S.pending[id];try{c.api.sendMessage(box("✅ APPROVED",`${BOT} ON! ${PREFIX}menu`),id)}catch(e){}}save();return box("✅ ALL","Approved "+ids.length)}});
-register({name:"bot",permission:"admin",description:"Bot toggle",run:c=>{const a=String(c.args[0]||"").toLowerCase();if(a==="on"){S.settings.botEnabled=true;S.settings.replies=true;save();return box("🤖","🟢 ON")}if(a==="off"){S.settings.botEnabled=false;save();return box("🤖","🔴 OFF admin bypass")}return box("🤖 BOT",`Enabled:${S.settings.botEnabled}\nPending:${Object.keys(S.pending).length}`)}});
-async function execute(api,e){
- const p=parse(e.body);if(!p)return;const uid=String(e.senderID||""),tid=String(e.threadID||"");if(!uid||!tid)return;
- const adminUser=isAdmin(uid);
- console.log(`📩 ${p.name} from ${uid} admin=${adminUser} pending=${!!S.pending[tid]} group=${tid}`);
- const group=await syncGroup(api,tid);
- const isPending=S.pending[tid]&&!S.groups[tid];
- if(isPending&&!adminUser){console.log(`⏸️ Blocked pending GC ${tid} from ${uid}`);return;}
- react(api,e);
- const c=getCommand(p.name);if(!c){console.log(`❓ Unknown ${p.name}`);return send(api,e,box("❓ UNKNOWN",`No ${PREFIX}${p.name}\n📚 ${PREFIX}menu`));}
- const user=getUser(uid);
- const ctx={api,event:e,uid,threadID:tid,user,group,args:p.args,raw:p.raw,PREFIX,prefix:PREFIX,state:S,isAdmin:adminUser,send:x=>send(api,e,x),reply:x=>send(api,e,x),react:()=>react(api,e),axios,save};
- if(!S.settings.botEnabled&&!adminUser)return send(api,e,box("🔴 OFF","Disabled"));
- if(c.permission==="admin"&&!adminUser)return send(api,e,box("🔐 DENIED","Admin only"));
- const key=`${tid}:${uid}:${c.name}`,now=Date.now(),last=cmdCD.get(key)||0,cd=Number(c.cooldown||0);
- if(cd&&!adminUser&&now-last<cd)return send(api,e,box("⏳ CD",`Wait ${Math.ceil((cd-(now-last))/1000)}s`));
- cmdCD.set(key,now);
- try{const result=await c.run(ctx);if(result!=null&&result!=="")send(api,e,result);saveUser(user);save();}catch(err){console.log(`❌ [${c.name}]`,err.message);send(api,e,box("💥 ERROR",err.message))}}
-let reconnectAttempts=0,isConnecting=false,stopListener=null,heartbeat=null,lastRestart=0;
-function getAppState(){if(!APPSTATE_RAW){console.log("❌ APPSTATE EMPTY");return null}let data=APPSTATE_RAW;try{data=JSON.parse(data)}catch(e){try{data=JSON.parse(decodeURIComponent(data))}catch(e2){return null}}if(!Array.isArray(data)||!data.length)return null;console.log(`🍪 APPSTATE ${data.length}`);return data;}
-function connectMessenger(){
- if(isConnecting)return;isConnecting=true;
- const appState=getAppState();if(!appState){isConnecting=false;return}
- console.log(`🔐 Login #${reconnectAttempts+1}`);
- try{
-  login({appState},(err,api)=>{
-   isConnecting=false;
-   if(err){console.log("❌ Login:",err.error||err.message);const d=Math.min(10000*Math.pow(1.5,reconnectAttempts),120000);reconnectAttempts++;setTimeout(connectMessenger,d);return;}
-   reconnectAttempts=0;global.API_INSTANCE=api;api.setOptions({listenEvents:true,updatePresence:true,selfListen:false,autoMarkRead:false,autoMarkDelivery:false,forceLogin:true});
-   console.log(`🤖 CONNECTED ${api.getCurrentUserID()}`);S.settings.botEnabled=true;S.settings.replies=true;save();
-   const startListener=()=>{
-    if(stopListener)try{stopListener()}catch(e){}
-    if(heartbeat)clearInterval(heartbeat);
-    console.log("🎧 MQTT ON");
-    stopListener=api.listenMqtt(async(err,e)=>{
-     if(err){console.log("⚠️ MQTT:",err.error||err.message);if(String(err.error||err.message).includes("Not logged in")||String(err.error||err.message).includes("Connection")){if(stopListener)try{stopListener()}catch(x){}if(heartbeat)clearInterval(heartbeat);setTimeout(connectMessenger,5000);}return;}
-     try{
-      if(e.logMessageType==="log:subscribe"&&e.threadID){
-       const id=String(e.threadID),g=await syncGroup(api,id);
-       if(!g.approved&&!S.groups[id]){
-        S.pending[id]={...g,approved:false,pendingAt:Date.now()};save();
-        console.log(`⏳ NEW PENDING ${g.name} ${id}`);
-        for(const adminID of ADMINS)try{api.sendMessage([`⏳ NEW GC PENDING`,`👥 ${g.name}`,`🆔 ${id}`,`👤 ${g.members}`,``, `✅ ${PREFIX}approve_gc ${id}`].join("\n"),adminID)}catch(x){}
-       }
-      }
-      if(e.type==="message"&&e.body){
-       if(e.senderID===api.getCurrentUserID())return;
-       await execute(api,e);
-      }
-     }catch(x){console.log("EVENT",x.message)}
-    });
-    heartbeat=setInterval(()=>{try{if(!global.API_INSTANCE){clearInterval(heartbeat);connectMessenger();return;}api.getCurrentUserID();}catch(ex){clearInterval(heartbeat);connectMessenger();}},60000);
-   };
-   startListener();
-   setInterval(()=>{const now=Date.now();if(now-lastRestart>25*60*1000){lastRestart=now;console.log("🔄 Refresh");startListener();}},5*60*1000);
-  });
- }catch(e){isConnecting=false;console.log("Login ex",e.message);setTimeout(connectMessenger,15000);}
+const FCA=require("ws3-fca"),login=typeof FCA==="function"?FCA:(FCA.login||FCA);
+const BOT_NAME="iKON-BOT",OWNER_NAME="Aphecks iKon Klerk",PREFIX=String(process.env.PREFIX||"!"),PORT=+process.env.PORT||1000,APPSTATE_RAW=process.env.APPSTATE||"",GEMINI_API_KEY=process.env.GEMINI_API_KEY||"";
+const ADMINS=new Set(String(process.env.ADMIN_UIDS||"").split(",").map(x=>x.trim()).filter(Boolean)),app=express();
+app.use(express.json({limit:"2mb"}));
+
+const DIR=path.join(__dirname,"data"),FILE=path.join(DIR,"state.json");if(!fs.existsSync(DIR))fs.mkdirSync(DIR,{recursive:true});
+const DEFAULT={settings:{botEnabled:true,maintenance:false,replies:true,reactions:true,autoReact:"👍",reactCooldown:2500,prefix:PREFIX},users:{},groups:{},pending:{},battles:{},cooldowns:{},spam:{},logs:[],events:{},commandStats:{}};
+let S=DEFAULT;
+try{if(fs.existsSync(FILE)){const r=JSON.parse(fs.readFileSync(FILE,"utf8"));S={...DEFAULT,...r,settings:{...DEFAULT.settings,...(r.settings||{})}}}}catch(e){console.log("⚠️ State error:",e.message)}
+const now=()=>Date.now(),save=()=>{try{fs.writeFileSync(FILE,JSON.stringify(S,null,2))}catch(e){}},money=n=>Number(n||0).toLocaleString("en-US");
+
+function user(id,name){
+ id=String(id);if(!S.users[id])S.users[id]={uid:id,name:name||"Player",balance:0,bank:0,savings:0,vault:0,credit:500,xp:0,level:1,prestige:0,inventory:[],items:{},pets:[],skills:[],achievements:[],titles:[],stats:{commands:0,wins:0,losses:0,battles:0,messages:0}};
+ const u=S.users[id];u.name=name||u.name||"Player";u.balance=+u.balance||0;u.bank=+u.bank||0;u.savings=+u.savings||0;u.vault=+u.vault||0;u.credit=+u.credit||500;u.xp=+u.xp||0;u.level=Math.max(1,+u.level||1);u.pets=Array.isArray(u.pets)?u.pets:[];u.items=u.items||{};u.inventory=Array.isArray(u.inventory)?u.inventory:[];u.stats=u.stats||{};u.stats.commands=+u.stats.commands||0;u.stats.messages=+u.stats.messages||0;return u;
 }
-app.get("/",(req,res)=>res.json({bot:BOT,status:"ACTIVE",commands:registry.size,groups:Object.keys(S.groups).length,pending:Object.keys(S.pending).length,admins:[...ADMINS]}));
-app.get("/health",(req,res)=>res.json({ok:true,commands:registry.size,messenger:Boolean(global.API_INSTANCE)}));
-app.listen(PORT,()=>console.log(`🌐 ${BOT} :${PORT}`));
+function group(id,name){
+ id=String(id);if(!S.groups[id])S.groups[id]={threadID:id,name:name||"Unknown Group",enabled:true,pending:true,approved:false,members:0};
+ const g=S.groups[id];g.name=name||g.name||"Unknown Group";return g;
+}
+
+/* COMMAND REGISTRY */
+const registry=new Map(),aliases=new Map();let duplicates=0;
+function register(c,src){
+ if(!c?.name||typeof c.run!=="function")return;
+ const n=c.name.trim().toLowerCase();if(registry.has(n)){duplicates++;return}
+ c.name=n;c.aliases=(c.aliases||[]).map(x=>String(x).toLowerCase());c.category=c.category||"Other";c.purpose=c.purpose||c.description||"Community command";c.cooldown=+c.cooldown||0;c.permission=c.permission||"user";
+ registry.set(n,c);for(const a of c.aliases)if(a&&!registry.has(a)&&!aliases.has(a))aliases.set(a,n);
+}
+const resolve=n=>registry.get(String(n||"").toLowerCase())||registry.get(aliases.get(String(n||"").toLowerCase())||"");
+
+function load(){
+ const d=path.join(__dirname,"commands");if(!fs.existsSync(d))return;
+ fs.readdirSync(d).filter(f=>/^cmds_\d+\.js$/i.test(f)).sort((a,b)=>+a.match(/\d+/)-+b.match(/\d+/)).forEach(f=>{try{const p=path.join(d,f);delete require.cache[require.resolve(p)];const x=require(p),a=Array.isArray(x)?x:Object.values(x||{});a.forEach(c=>register(c,f));console.log(`📦 ${f} loaded`)}catch(e){console.log(`❌ ${f}:`,e.message)}});
+ console.log(`📚 Commands: ${registry.size} | Duplicates: ${duplicates}`);
+}
+
+/* UI */
+function box(t,b){return`━━━━━━━━━━━━━━━━━━━━\n${t}\n━━━━━━━━━━━━━━━━━━━━\n${b}\n━━━━━━━━━━━━━━━━━━━━\n🤖 ${BOT_NAME}\n👑 ${OWNER_NAME}\n⚡ Prefix: ${PREFIX}\n━━━━━━━━━━━━━━━━━━━━`}
+function menu(){
+ const f=[...registry.values()].filter(x=>x.featured).slice(0,150),l=[
+ "🌟━━━━━━━━━━━━━━━━━━━━🌟","       🤖 iKON-BOT","     COMMUNITY HUB","🌟━━━━━━━━━━━━━━━━━━━━🌟","","🔥 Yo bro, welcome to the world!","💰 Build your empire","🐾 Raise legendary pets","⚔️ Battle players & bosses","🎰 Test your luck","🔥 Run missions & crimes","🧠 Talk with AI","","📚━━ COMMAND CATEGORIES ━━📚","",
+ "🐾 PET LABS","   ✦ Pets • Breeding • Care • Battles","",
+ "💰 FINANCE","   ✦ Money • Bank • Business • Stocks","",
+ "🔥 CRIME","   ✦ GTA • Heists • Robbery • Gangs","",
+ "🎮 ARCADE","   ✦ Casino • Games • Events • Social","",
+ "🛡️ ADMIN","   ✦ Moderation • Settings • Controls","",
+ "⭐ PROGRESSION","   ✦ Levels • Jobs • Missions • Guilds","",
+ "⚔️ WAR-ZONE","   ✦ Bosses • PvP • Dungeon • Raid","",
+ "🧠 AI SYSTEMS","   ✦ AI • Tools • Translation • Creative","",
+ "━━━━━━━━━━━━━━━━━━━━","⭐ FEATURED COMMANDS","━━━━━━━━━━━━━━━━━━━━",""
+ ];
+ f.forEach(c=>l.push(`✨ ${PREFIX}${c.name}`));
+ l.push("","━━━━━━━━━━━━━━━━━━━━","💡 QUICK HELP","━━━━━━━━━━━━━━━━━━━━",`📖 ${PREFIX}help <command>`,`🔎 ${PREFIX}search <word>`,`📂 ${PREFIX}category <name>`,`🆔 ${PREFIX}uid`,`👤 ${PREFIX}me`,`💰 ${PREFIX}bal`,`📊 ${PREFIX}status`,"","😂 Hint: Try something... I might surprise you.","🚀 Let's build your empire!","🔥 Stay active. Stay dangerous.","","━━━━━━━━━━━━━━━━━━━━",`🤖 ${BOT_NAME}`,`👑 ${OWNER_NAME}`,"━━━━━━━━━━━━━━━━━━━━");
+ return l.join("\n");
+}
+
+/* PARSER */
+function parse(body){
+ const t=String(body||"").trim();if(!t)return;
+ const e=PREFIX.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),m=t.match(new RegExp("^"+e+"\\s*(\\S+)?(?:\\s+([\\s\\S]*))?$","i"));if(!m)return;
+ const a=String(m[2]||"").trim();return{name:String(m[1]||"menu").toLowerCase(),args:a?a.split(/\s+/):[],argText:a,raw:t};
+}
+
+/* PERMISSIONS */
+const admin=id=>ADMINS.has(String(id));
+function groupAdmin(api,tid,uid){return new Promise(r=>{try{api.getThreadInfo(tid,(e,i)=>{if(e||!i)return r(false);r((i.adminIDs||[]).some(x=>String(typeof x==="string"?x:x.id||x.userID)===String(uid)))})}catch(e){r(false)}})}
+async function permission(api,c,x){if(admin(x.uid)||c.permission==="user")return true;if(["admin","owner","staff"].includes(String(c.permission).toLowerCase()))return groupAdmin(api,x.threadID,x.uid);return true}
+
+/* REPLY */
+function send(api,text,tid,mid){return new Promise(r=>{try{api.sendMessage(String(text),tid,e=>r(!e),mid)}catch(e){r(false)}})}
+function react(api,e){try{if(S.settings.reactions&&api.setMessageReaction)api.setMessageReaction(S.settings.autoReact||"👍",e.messageID,()=>{},true)}catch(x){}}
+
+/* AI */
+async function ai(prompt){
+ if(!GEMINI_API_KEY)return"🧠 AI is currently offline because GEMINI_API_KEY is not configured.";
+ try{const u="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key="+encodeURIComponent(GEMINI_API_KEY),r=await axios.post(u,{contents:[{parts:[{text:`You are iKON-BOT. Be friendly, useful and concise.\n${prompt}`}]}]},{timeout:30000});return r.data?.candidates?.[0]?.content?.parts?.[0]?.text||"🧠 No response generated."}catch(e){return"🧠 AI temporarily unavailable."}
+}
+
+/* SYSTEM COMMANDS */
+[
+ {name:"menu",aliases:["commands","cmds"],category:"System",featured:true,purpose:"Open the main menu",run:async()=>({text:menu()})},
+ {name:"help",aliases:["h"],category:"System",featured:true,purpose:"Show command information",run:async c=>{const x=resolve(c.args[0]);return{text:x?box(`📖 ${PREFIX}${x.name}`,`💡 ${x.purpose}\n📂 ${x.category}\n⚡ Cooldown: ${x.cooldown||0}s\n🔐 Permission: ${x.permission}\n📝 ${PREFIX}${x.name}${x.usage?" "+x.usage:""}`):menu()}}},
+ {name:"search",category:"System",featured:true,purpose:"Search commands",run:async c=>{const q=c.args.join(" ").toLowerCase();const f=[...registry.values()].filter(x=>x.name.includes(q)||x.purpose.toLowerCase().includes(q)).slice(0,40);return{text:box(`🔎 SEARCH: ${q}`,f.length?f.map(x=>`✨ ${PREFIX}${x.name} — ${x.purpose}`).join("\n"):"❌ Nothing found.")}}},
+ {name:"category",aliases:["cat"],category:"System",featured:true,purpose:"Show category commands",run:async c=>{const q=c.args.join(" ").toLowerCase(),f=[...registry.values()].filter(x=>String(x.category).toLowerCase()===q);return{text:f.length?box(`📂 ${q.toUpperCase()}`,f.map(x=>`✨ ${PREFIX}${x.name} — ${x.purpose}`).join("\n")):box("📂 CATEGORIES","🐾 PET LABS\n💰 FINANCE\n🔥 CRIME\n🎮 ARCADE\n🛡️ ADMIN\n⭐ PROGRESSION\n⚔️ WAR-ZONE\n🧠 AI SYSTEMS")}}},
+ {name:"uid",aliases:["myuid","id"],category:"System",featured:true,purpose:"Show Messenger UID",run:async c=>({text:box("🆔 YOUR UID",`👤 ${c.user.name}\n🪪 ${c.uid}`)})},
+ {name:"me",aliases:["profile"],category:"System",featured:true,purpose:"Show player profile",run:async c=>({text:box("👤 PLAYER PROFILE",`👤 ${c.user.name}\n🪪 ${c.uid}\n⭐ Level: ${c.user.level}\n✨ XP: ${c.user.xp}\n💰 Wallet: $${money(c.user.balance)}\n🏦 Bank: $${money(c.user.bank)}\n🐾 Pets: ${c.user.pets.length}\n👑 Prestige: ${c.user.prestige}\n🏆 Rank: ${c.user.rank||"Rookie"}`)})},
+ {name:"bal",aliases:["balance","b","money"],category:"Finance",featured:true,purpose:"Show financial balances",run:async c=>({text:box("💰 FINANCIAL STATUS",`💵 Wallet: $${money(c.user.balance)}\n🏦 Bank: $${money(c.user.bank)}\n💎 Savings: $${money(c.user.savings)}\n🔐 Vault: $${money(c.user.vault)}\n💳 Credit: ${c.user.credit}\n\n🔥 Keep building your empire!`)})},
+ {name:"ping",aliases:["pong"],category:"System",featured:true,purpose:"Check bot response",run:async()=>({text:box("🏓 PONG!","🟢 iKON-BOT is alive!\n⚡ Messenger connection active.\n🚀 Ready for commands!")})},
+ {name:"status",aliases:["health"],category:"System",featured:true,purpose:"Show bot status",run:async()=>({text:box("📊 BOT STATUS",`🟢 ONLINE\n📚 Commands: ${registry.size}\n👥 Groups: ${Object.keys(S.groups).length}\n👤 Users: ${Object.keys(S.users).length}\n💾 Storage: LOCAL\n🤖 Messenger: ${apiGlobal?"CONNECTED":"WAITING"}\n⏱️ Uptime: ${Math.floor(process.uptime())}s`)})},
+ {name:"keepalive",aliases:["alive"],category:"System",purpose:"Check bot uptime",run:async()=>({text:`💚 ${BOT_NAME} is awake!\n🔥 Still running.\n⏱️ ${Math.floor(process.uptime())} seconds.`})}
+].forEach(c=>register(c,"index.js"));
+
+/* EXECUTION */
+async function execute(api,e,p){
+ const uid=String(e.senderID||"");if(!uid)return;
+ const u=user(uid,"Player"),tid=String(e.threadID||""),g=group(tid,e.threadName||"Unknown Group"),c=resolve(p.name);
+ if(!c)return send(api,box("❓ UNKNOWN COMMAND",`I don't know ${PREFIX}${p.name}.\n\n🔎 Try ${PREFIX}search ${p.name}\n📖 Try ${PREFIX}help\n📋 Try ${PREFIX}menu`),tid,e.messageID);
+ const a=admin(uid);
+ if(!a&&!S.settings.botEnabled)return send(api,box("🔴 BOT OFFLINE","The bot is currently disabled by an administrator."),tid,e.messageID);
+ if(!a&&S.settings.maintenance)return send(api,box("🛠️ MAINTENANCE","iKON-BOT is being updated right now.\nPlease try again shortly."),tid,e.messageID);
+ if(!a&&g.enabled===false)return send(api,box("🔒 BOT DISABLED HERE","An administrator has disabled iKON-BOT in this group."),tid,e.messageID);
+ if(!await permission(api,c,{uid,threadID:tid,user:u,group:g}))return send(api,box("🔐 ACCESS DENIED","You don't have permission to use this command."),tid,e.messageID);
+ const key=`${uid}:${c.name}`,left=(S.cooldowns[key]||0)+(c.cooldown||0)*1000-now();
+ if(!a&&left>0)return send(api,`⏳ Hold up bro 😎\n\n⚡ ${PREFIX}${c.name} is cooling down.\n🕐 Try again in ${Math.ceil(left/1000)}s.`,tid,e.messageID);
+ try{
+  u.stats.commands++;const r=await c.run({api,event:e,uid,threadID:tid,user:u,group:g,args:p.args,argText:p.argText,raw:p.raw,prefix:PREFIX,command:c,state:S,battles:S.battles,users:S.users,groups:S.groups,registry,aliases,admin:a,botUID,gemini:ai,askGemini:ai,send:t=>send(api,t,tid,e.messageID)});
+  if(r?.money)u.balance+=+r.money;if(r?.xp){u.xp+=+r.xp;while(u.xp>=u.level*1000){u.xp-=u.level*1000;u.level++}}
+  if(r?.text)await send(api,r.text,tid,e.messageID);if(!a&&c.cooldown)S.cooldowns[key]=now();S.commandStats[c.name]=(S.commandStats[c.name]||0)+1;save();
+ }catch(x){console.log(`❌ ${c.name}:`,x.stack||x.message);send(api,box("💥 COMMAND ERROR",`Something went wrong with ${PREFIX}${c.name}.\n\n🔄 Try again.\n🤖 iKON-BOT is still online.`),tid,e.messageID)}
+}
+
+/* GROUP INFO */
+function threadInfo(api,id){return new Promise(r=>{try{api.getThreadInfo(id,(e,i)=>r(e?null:i))}catch(e){r(null)}})}
+async function detect(api,e){
+ if(!e.threadID)return;const id=String(e.threadID);let g=S.groups[id];
+ if(!g){const i=await threadInfo(api,id);g=group(id,i?.threadName||"Unknown Group");g.members=i?.participantIDs?.length||0;g.adminIDs=i?.adminIDs||[];g.pending=true;S.pending[id]={threadID:id,name:g.name,createdAt:now()};save();console.log(`🆕 NEW GC: ${g.name} (${id})`);if(ADMINS.size)for(const a of ADMINS)send(api,`🆕 NEW GROUP DETECTED\n\n🏠 ${g.name}\n🆔 ${id}\n👥 ${g.members}\n\n📌 Added to pending list.\n🔐 Admin commands remain available.`,a)}
+}
+
+/* MESSENGER EVENTS */
+async function eventHandler(api,e){
+ try{
+  console.log(`📨 EVENT ${e?.type||"?"} | ${e?.threadID||"?"}`);
+  if(!e||e.type!=="message"||(botUID&&String(e.senderID)===String(botUID)))return;
+  const body=e.body||e.message?.body;if(!body)return;
+  const u=user(e.senderID);u.stats.messages++;
+  try{api.getUserInfo?.([String(e.senderID)],(x,d)=>{if(!x&&d?.[e.senderID]?.name){u.name=d[e.senderID].name;save()}})}catch(x){}
+  console.log(`💬 MESSAGE: ${String(body).slice(0,150)}`);
+  const p=parse(body);if(!p)return;
+  console.log(`🧩 PARSED: ${PREFIX}${p.name}`);
+  await detect(api,e);react(api,e);await execute(api,e,p);
+ }catch(x){console.log("❌ EVENT:",x.stack||x.message||x)}
+}
+
+/* LOGIN */
+let apiGlobal=null,botUID=null;
+function start(){
+ if(!APPSTATE_RAW){console.log("❌ APPSTATE missing.");return}
+ let state;try{state=JSON.parse(APPSTATE_RAW)}catch(e){console.log("❌ APPSTATE JSON error:",e.message);return}
+ console.log(`🍪 APPSTATE loaded: ${Array.isArray(state)?state.length:0} cookies`);
+ console.log("🔐 Connecting to Messenger...");
+ login({appState:state,listenEvents:true,selfListen:false,updatePresence:false,forceLogin:false,autoMarkRead:false,autoMarkDelivery:false,online:true,logLevel:"silent"},(err,api)=>{
+  if(err){console.log("❌ LOGIN:",err.stack||err.message);return setTimeout(start,15000)}
+  apiGlobal=api;try{botUID=String(api.getCurrentUserID?.()||"")}catch(e){}
+  console.log("🤖 iKON-BOT Messenger connected.");
+  console.log(`🆔 Bot UID: ${botUID||"unknown"}`);
+  if(!api.listenMqtt)return console.log("❌ listenMqtt unavailable.");
+  api.listenMqtt(async(err,e)=>{if(err)return console.log("❌ MQTT:",err.message||err);await eventHandler(api,e)});
+  console.log("👂 Messenger message listener ACTIVE.");
+  console.log("💬 Waiting for Messenger messages...");
+ });
+}
+
+/* SERVER */
+app.get("/",(q,r)=>r.json({status:"ACTIVE",bot:BOT_NAME,prefix:PREFIX,commands:registry.size,messenger:!!apiGlobal,storage:"LOCAL",uptime:Math.floor(process.uptime())}));
+app.get("/health",(q,r)=>r.json({ok:true,bot:BOT_NAME,commands:registry.size,messenger:!!apiGlobal,storage:"LOCAL",uptime:Math.floor(process.uptime())}));
+app.get("/menu",(q,r)=>r.type("text").send(menu()));
 setInterval(save,30000);
-setInterval(()=>{const url=RENDER_URL||`http://127.0.0.1:${PORT}/health`;axios.get(url,{timeout:10000}).catch(()=>{})},240000);
-process.on("unhandledRejection",e=>console.log("UNHANDLED",e?.message));
-process.on("uncaughtException",e=>console.log("EXCEPTION",e.stack||e.message));
-function start(){console.log("━━━━━━━━━━━━");console.log(`🤖 ${BOT}`);console.log(`👑 ${OWNER}`);console.log(`⚡ ${PREFIX}`);console.log("━━━━━━━━━━━━");loadCommands();connectMessenger();}
+
+console.log("━━━━━━━━━━━━━━━━━━━━");
+console.log(`🤖 ${BOT_NAME}`);
+console.log(`👑 ${OWNER_NAME}`);
+console.log(`⚡ Prefix: ${PREFIX}`);
+console.log("💾 Storage: LOCAL STATE");
+console.log("━━━━━━━━━━━━━━━━━━━━");
+load();
+app.listen(PORT,"0.0.0.0",()=>console.log(`🌐 ${BOT_NAME} running on ${PORT}`));
 start();
+
+process.on("SIGINT",()=>{save();process.exit(0)});
+process.on("SIGTERM",()=>{save();process.exit(0)});
+process.on("uncaughtException",e=>console.log("💥 UNCAUGHT:",e.stack||e.message));
+process.on("unhandledRejection",e=>console.log("💥 REJECTION:",e?.stack||e?.message));
