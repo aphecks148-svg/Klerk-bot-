@@ -1,0 +1,12 @@
+{
+  "name": "ikon-bot",
+  "version": "2.1.0",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "ws3-fca": "latest",
+    "express": "latest",
+    "axios": "latest",
+    "canvas": "latest"
+  }
+}
