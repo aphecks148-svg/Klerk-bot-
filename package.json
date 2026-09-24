@@ -1,12 +1,23 @@
 {
   "name": "ikon-bot",
   "version": "2.1.0",
+  "description": "iKON-BOT by Aphecks iKon Klerk - 771 CMDS War Heart Casino Control",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "author": "Aphecks iKon Klerk",
+  "license": "MIT",
   "dependencies": {
-    "ws3-fca": "latest",
-    "express": "latest",
-    "axios": "latest",
-    "canvas": "latest"
+    "ws3-fca": "^1.9.8",
+    "express": "^4.18.2",
+    "axios": "^1.6.7",
+    "canvas": "^2.11.2",
+    "fs-extra": "^11.2.0",
+    "moment-timezone": "^0.5.43"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
