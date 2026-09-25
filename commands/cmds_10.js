@@ -1,124 +1,49 @@
-// commands/cmds_10.js // 👤 SOCIAL + 🤖 AI GEMINI + ⚽ SPORTS + ADMIN — iKON-BOT FIXED
+// commands/cmds_10.js
+// ❤️ SOCIALHUB — iKON-BOT
 module.exports=({api,event,user,reply,users,profile,fun})=>{
 const r=t=>api.sendMessage(t,event.threadID,()=>{},event.messageID);
-user.crime=user.crime||{rep:0,heat:0,success:0,fail:0,heists:0,crew:[],rank:1};
-user.social=user.social||{marry:null,partner:null,crush:null};
-user.wallet=user.wallet||0;
-
-// ===== GEMINI HELPER =====
-async function gemini(prompt){
-  try{
-    const key = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || "";
-    if(!key) return `❌ GEMINI_API_KEY missing in Render ENV.\nQ: ${prompt}`;
-    const { GoogleGenerativeAI } = require("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    return result.response.text();
-  }catch(e){
-    return `⚠️ Gemini Error: ${e.message}\nQ: ${prompt}`;
-  }
-}
-
+user.social=user.social||{rep:0,likes:0,followers:[],following:[],friends:[],posts:[],streak:0};
+user.social.followers=user.social.followers||[];user.social.following=user.social.following||[];user.social.friends=user.social.friends||[];user.social.posts=user.social.posts||[];
+const find=uid=>users.get(String(uid||""));
+const name=u=>u?.name||u?.firstName||u?.uid||"Unknown";
 const cmds=[
-{name:"marry",run:async({args})=>{let t=args[0]||"someone";if(user.social.marry)return r(`💍 Already married to ${user.social.marry}`);user.social.marry=t;r(`💍 You proposed to ${t}!\n💑 Married! ${fun()}`)}},
-{name:"divorce",run:async()=>{if(!user.social.marry)return r("💔 Not married.");let ex=user.social.marry;user.social.marry=null;r(`💔 Divorced ${ex}.`)}},
-{name:"partner",run:async({args})=>{if(args[0]){user.social.partner=args[0];r(`💑 Partner set: ${args[0]}`)}else{r(`💑 Partner: ${user.social.partner||"None"}`)}}},
-{name:"couple",aliases:["couples"],run:async({args})=>{let a=args[0]||event.senderID,b=args[1]||event.senderID;let pa=await profile(api,a).catch(()=>({name:a})),pb=await profile(api,b).catch(()=>({name:b}));r(`💑 COUPLE\n${pa.name} + ${pb.name}\n❤️ Match: ${Math.floor(Math.random()*100)}%`)}},
-{name:"pair",run:async({args})=>{let a=args[0]||"User1",b=args[1]||"User2";r(`💞 PAIRED\n${a} + ${b} = ${Math.floor(Math.random()*100)}% Love`)}},
-{name:"crush",run:async({args})=>{let t=args[0]||"secret";user.social.crush=t;r(`💘 Your crush is ${t}! Shhh...`)}},
-{name:"slap",run:async({args})=>{let t=args[0]||"someone";r(`👋 ${user.firstName||"You"} slapped ${t}! 💥`)}},
-{name:"kiss",run:async({args})=>{let t=args[0]||"someone";r(`😘 ${user.firstName||"You"} kissed ${t}! ❤️`)}},
-{name:"hug",run:async({args})=>{let t=args[0]||"someone";r(`🤗 ${user.firstName||"You"} hugged ${t}!`)}},
-{name:"poke",run:async({args})=>{let t=args[0]||"someone";r(`👉 Poked ${t}!`)}},
-{name:"gift",run:async({args})=>{let t=args[0]||"someone";let g=args.slice(1).join(" ")||"🎁";r(`🎁 You gifted ${g} to ${t}!`)}},
-{name:"spy",run:async({args})=>{let t=args[0]||"someone";let p=await profile(api,t).catch(()=>({name:t}));r(`🕵️ SPY\n👤 ${p.name}\n🆔 ${t}\n💰 $${(users.get(t)?.wallet||0).toLocaleString()}`)}},
-{name:"roast",run:async({args})=>{let q=args.join(" ")||"someone";let ans=await gemini(`Roast ${q} in a funny savage way, 1 line`);r(`🔥 ROAST ${q}:\n${ans}`)}},
-{name:"compliment",aliases:["comp"],run:async({args})=>{let q=args.join(" ")||"you";let ans=await gemini(`Give a sweet compliment for ${q}, 1 line`);r(`💖 ${ans}`)}},
-{name:"ship",run:async({args})=>{let a=args[0]||"Me",b=args[1]||"You";r(`🚢 SHIP\n${a} + ${b}\nLove: ${Math.floor(Math.random()*100)}% ${fun()}`)}},
-
-// ===== AI GEMINI CONNECTED =====
-{name:"ai",run:async({args})=>{let q=args.join(" ");if(!q)return r("🤖 Use:!ai <question>");let ans=await gemini(q);r(`🤖 GEMINI AI\nQ: ${q}\n\n${ans}`)}},
-{name:"ask",run:async({args})=>{let q=args.join(" ");if(!q)return r("🤖 Use:!ask <question>");let ans=await gemini(q);r(`🤖 ASK:\n${ans}`)}},
-{name:"chat",run:async({args})=>{let q=args.join(" ")||"Hello";let ans=await gemini(`Chat friendly: ${q}`);r(`💬 ${ans}`)}},
-{name:"imagine",aliases:["gen"],run:async({args})=>{let p=args.join(" ")||"a cat";let ans=await gemini(`Describe an image prompt for: ${p} - make it detailed for AI image generation`);r(`🎨 IMAGINE: ${p}\n\n📝 Prompt:\n${ans}\n\n🖼️ (Use this prompt in an image gen bot)`)}},
-{name:"image",run:async({args})=>{let q=args.join(" ")||"random";let ans=await gemini(`Give 1 detailed image description for: ${q}`);r(`🖼️ IMAGE IDEA: ${q}\n\n${ans}`)}},
-{name:"translate",aliases:["trans"],run:async({args})=>{let t=args.join(" ");if(!t)return r("🌐 Use:!translate <text>");let ans=await gemini(`Translate to English and Arabic: ${t}`);r(`🌐 TRANSLATE\n${ans}`)}},
-{name:"summarize",run:async({args})=>{let t=args.join(" ");if(!t)return r("📝 Use:!summarize <long text>");let ans=await gemini(`Summarize this: ${t}`);r(`📝 SUMMARY\n${ans}`)}},
-{name:"define",run:async({args})=>{let w=args[0]||"word";let ans=await gemini(`Define: ${w} in simple English + Arabic`);r(`📖 ${ans}`)}},
-{name:"search",run:async({args})=>{let q=args.join(" ");if(!q)return r("🔍 Use:!search <query>");let ans=await gemini(`Answer and explain like search result: ${q}`);r(`🔍 SEARCH: ${q}\n\n${ans}`)}},
-{name:"weather",run:async({args})=>{let c=args.join(" ")||"Amman";r(`🌤️ WEATHER ${c}\n☀️ Use!ai weather in ${c} for live Gemini forecast.`)}},
-{name:"calc",run:async({args})=>{try{let e=args.join(" ");let res=eval(e);r(`🧮 ${e} = ${res}`)}catch(e){r("❌ Invalid calc")}}},
-{name:"convert",run:async({args})=>{let q=args.join(" ");let ans=await gemini(`Convert: ${q} - give exact answer`);r(`🔄 ${ans}`)}},
-{name:"qrcode",aliases:["qr"],run:async({args})=>{let t=args.join(" ")||"https://example.com";r(`🔳 QR CODE\nText: ${t}\n🔗 https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(t)}`)}},
-{name:"youtube",aliases:["yt"],run:async({args})=>r(`▶️ YOUTUBE\nSearch: ${args.join(" ")||"music"}`)},
-{name:"music",run:async({args})=>r(`🎵 MUSIC\n${args.join(" ")||"random song"} 🎶`)},
-{name:"video",run:async({args})=>r(`🎬 VIDEO\n${args.join(" ")||"random video"}`)},
-{name:"sticker",run:async()=>r("🖼️ STICKER\nSend image with!sticker")},
-{name:"gif",run:async({args})=>r(`🎞️ GIF: ${args.join(" ")||"funny"}`)},
-{name:"meme",run:async()=>{let ans=await gemini(`Tell a short funny meme joke, 1 line`);r(`🤣 MEME\n${ans}`)}},
-{name:"caption",run:async({args})=>{let q=args.join(" ")||"my photo";let ans=await gemini(`Write 3 Instagram captions for: ${q}`);r(`✍️ CAPTION for "${q}"\n\n${ans}`)}},
-{name:"rewrite",run:async({args})=>{let q=args.join(" ");if(!q)return r("Use:!rewrite <text>");let ans=await gemini(`Rewrite better: ${q}`);r(`🔄 REWRITE\n${ans}`)}},
-{name:"prompt",run:async({args})=>{let q=args.join(" ")||"art";let ans=await gemini(`Create a professional AI art prompt for: ${q}`);r(`💡 PROMPT\n${ans}`)}},
-{name:"explain",run:async({args})=>{let q=args.join(" ");if(!q)return r("Use:!explain <topic>");let ans=await gemini(`Explain simply: ${q}`);r(`📚 EXPLAIN ${q}\n\n${ans}`)}},
-
-{name:"football",aliases:["futbol"],run:async()=>r("⚽ FOOTBALL\n!live!fixtures!results!standings")},
-{name:"live",aliases:["livescore"],run:async()=>{let ans=await gemini(`Give today's football live scores simulated with real teams`);r(`⚽ LIVE\n${ans}`)}},
-{name:"fixtures",run:async()=>r("📅 FIXTURES\nToday: Real vs Barca 21:00")},
-{name:"results",run:async()=>r("📊 RESULTS\nYesterday: Chelsea 3-0 Liverpool")},
-{name:"match",run:async({args})=>r(`⚽ MATCH: ${args.join(" ")||"Real Madrid"}`)},
-{name:"team",run:async({args})=>{let q=args.join(" ")||"Real Madrid";let ans=await gemini(`Give info about football team: ${q}`);r(`👕 TEAM ${q}\n${ans}`)}},
-{name:"teams",run:async()=>r("👕 TEAMS\nReal Madrid, Barcelona, Man City...")},
-{name:"league",run:async({args})=>r(`🏆 LEAGUE ${args.join(" ")||"La Liga"}`)},
-{name:"leagues",run:async()=>r("🏆 LEAGUES\nLa Liga, Premier League...")},
-{name:"standings",aliases:["table"],run:async({args})=>{let q=args.join(" ")||"La Liga";let ans=await gemini(`Give current standings table for ${q} 2025-2026 season`);r(`📊 STANDINGS ${q}\n${ans}`)}},
-{name:"footballnews",run:async()=>{let ans=await gemini(`Give 3 latest football news headlines`);r(`📰 FOOTBALL NEWS\n${ans}`)}},
-{name:"wrestling",aliases:["wwe"],run:async()=>r("🤼 WRESTLING\n!wrestlingnews!ufc")},
-{name:"wrestlingnews",run:async()=>{let ans=await gemini(`Give 3 latest WWE wrestling news`);r(`📰 ${ans}`)}},
-{name:"ufc",run:async()=>{let ans=await gemini(`Give next UFC fights`);r(`🥊 UFC\n${ans}`)}},
-{name:"sports",aliases:["score"],run:async()=>r("🏅 SPORTS\n!football!wrestling!ufc")},
-{name:"player",run:async({args})=>{let q=args.join(" ")||"Ronaldo";let ans=await gemini(`Give stats for football player: ${q}`);r(`👤 PLAYER ${q}\n${ans}`)}},
-
-{name:"menu",run:async()=>r("📜 MENU\n!menu1 - 174 cmds\n!menu2 - 186 cmds")},
-{name:"menu1",run:async()=>r("📜 MENU 1\n!balance!shop!pet!farm!mine!battle")},
-{name:"menu2",run:async()=>r("📜 MENU 2\n!marry!ai!football!admin!menu")},
-{name:"commands",aliases:["cmd"],run:async()=>r("📜 360 commands -!menu")},
-{name:"botinfo",aliases:["bot"],run:async()=>r(`🤖 iKON-BOT\nPrefix:!\nUsers: ${users.size}\nGemini: ${process.env.GEMINI_API_KEY?"✅ ON":"❌ OFF"}`)},
-{name:"ping",run:async()=>{let s=Date.now();r(`🏓 PONG ${Date.now()-s}ms`)}},
-{name:"uptime",run:async()=>r(`⏱️ UPTIME ${Math.floor(process.uptime()/3600)}h`)},
-{name:"groupinfo",aliases:["gcinfo"],run:async()=>r(`👥 GROUP ID: ${event.threadID}`)},
-{name:"members",run:async()=>r(`👥 Members: ${event.participantIDs?.length||0}`)},
-{name:"admins",run:async()=>{let a=event.adminIDs?.length||0;r(`👑 Admins: ${a}`)}},
-{name:"rules",run:async()=>r("📜 RULES: No spam, respect all.")},
-{name:"status",run:async()=>r("🟢 Bot ONLINE")},
-{name:"report",run:async({args})=>r(`🚩 REPORTED: ${args.join(" ")||"Issue"}`)},
-{name:"suggest",run:async({args})=>r(`💡 SUGGESTION: ${args.join(" ")}`)},
-{name:"feedback",run:async({args})=>r(`📝 FEEDBACK: ${args.join(" ")}`)},
-{name:"support",run:async()=>r("🆘 SUPPORT - Contact admin")},
-{name:"prefix",run:async({args})=>r(`🔧 Prefix: ${args[0]||"!"}`)},
-{name:"slowmode",run:async({args})=>r(`🐢 SLOWMODE ${args[0]||"off"}`)},
-{name:"antispam",run:async()=>r("🛡️ ANTISPAM ON")},
-{name:"announce",run:async({args})=>r(`📢 ${args.join(" ")||"Hello @everyone"}`)},
-{name:"admin",run:async()=>r("🛠️ ADMIN\n!settings!broadcast!warn!ban")},
-{name:"settings",run:async()=>r("⚙️ SETTINGS")},
-{name:"enable",run:async({args})=>r(`✅ Enabled ${args[0]||"feature"}`)},
-{name:"disable",run:async({args})=>r(`❌ Disabled ${args[0]||"feature"}`)},
-{name:"maintenance",run:async({args})=>r(`🔧 MAINTENANCE ${args[0]||"off"}`)},
-{name:"broadcast",aliases:["bc"],run:async({args})=>r(`📢 Broadcast: ${args.join(" ")||"Hi all"}`)},
-{name:"reload",run:async()=>r("♻️ Reloaded")},
-{name:"logs",run:async()=>r("📋 LOGS")},
-{name:"stats",run:async()=>r(`📊 Users: ${users.size}`)},
-{name:"pending",run:async()=>r("⏳ No pending")},
-{name:"approve",run:async({args})=>r(`✅ Approved ${args[0]||"user"}`)},
-{name:"reject",run:async({args})=>r(`❌ Rejected ${args[0]||"user"}`)},
-{name:"pendinggc",run:async()=>r("⏳ No pending GC")},
-{name:"approvegc",run:async({args})=>r(`✅ GC Approved ${args[0]||"id"}`)},
-{name:"rejectgc",run:async({args})=>r(`❌ GC Rejected ${args[0]||"id"}`)},
-{name:"warn",run:async({args})=>r(`⚠️ Warned ${args[0]||"user"}`)},
-{name:"warnings",run:async({args})=>r(`⚠️ Warnings ${args[0]||event.senderID}: 0`)},
-{name:"kick",run:async({args})=>r(`👢 Kicked ${args[0]||"user"}`)},
-{name:"ban",run:async({args})=>{let u=users.get(args[0]);if(u)u.banned=true;r(`🔨 Banned ${args[0]}`)}},
-{name:"unban",run:async({args})=>{let u=users.get(args[0]);if(u)u.banned=false;r(`♻️ Unbanned ${args[0]}`)}},
+{name:"me",aliases:["profileme","aboutme"],run:async()=>r(`👤 ${name(user)}\n⭐ Level: ${user.level||1}\n💰 Wallet: $${(user.wallet||0).toLocaleString()}\n❤️ HP: ${user.health||100}/${user.maxHealth||100}\n⭐ Rep: ${user.social.rep}\n👥 Followers: ${user.social.followers.length}\n🤝 Friends: ${user.social.friends.length}`)},
+{name:"social",aliases:["socialhub"],run:async()=>r("❤️ SOCIALHUB\n!me !bio !status !rep !friends !follow <uid>\n!unfollow <uid> !addfriend <uid> !removefriend <uid>\n!post <text> !posts !like <uid> !leaderboard\n!compliment <uid> !roast <uid> !ship <uid> <uid>")},
+{name:"bio",aliases:["about"],run:async({args})=>{if(!args.length)return r(`📝 BIO\n${user.bio||"No bio set. Use !bio <text>."}`);user.bio=args.join(" ").slice(0,200);r("📝 Bio updated successfully.")}},
+{name:"status",aliases:["mood"],run:async({args})=>{if(!args.length)return r(`💭 STATUS: ${user.status||"Available 🟢"}`);user.status=args.join(" ").slice(0,150);r("💭 Status updated.")}},
+{name:"rep",aliases:["reputation"],run:async()=>r(`⭐ ${name(user)} has ${user.social.rep} reputation.`)},
+{name:"friends",aliases:["friendlist"],run:async()=>r("🤝 FRIENDS\n"+(user.social.friends.length?user.social.friends.map(x=>`• ${name(find(x))}`).join("\n"):"No friends yet."))},
+{name:"follow",aliases:["subscribe"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");if(u.uid===user.uid)return r("😂 You cannot follow yourself.");if(!user.social.following.includes(u.uid))user.social.following.push(u.uid);u.social=u.social||{rep:0,likes:0,followers:[],following:[],friends:[],posts:[],streak:0};u.social.followers=u.social.followers||[];if(!u.social.followers.includes(user.uid))u.social.followers.push(user.uid);r(`❤️ You followed ${name(u)}.`)}},
+{name:"unfollow",aliases:["unsubscribe"],run:async({args})=>{let uid=String(args[0]||"");user.social.following=user.social.following.filter(x=>x!==uid);let u=find(uid);if(u?.social?.followers)u.social.followers=u.social.followers.filter(x=>x!==user.uid);r("💔 Follow removed.")}},
+{name:"followers",aliases:["fans"],run:async()=>r(`👥 FOLLOWERS: ${user.social.followers.length}\n${user.social.followers.slice(0,20).map(x=>`• ${name(find(x))}`).join("\n")||"Nobody yet."}`)},
+{name:"following",aliases:["followinglist"],run:async()=>r(`❤️ FOLLOWING: ${user.social.following.length}\n${user.social.following.slice(0,20).map(x=>`• ${name(find(x))}`).join("\n")||"Nobody yet."}`)},
+{name:"addfriend",aliases:["friend"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");if(u.uid===user.uid)return r("😂 That's you.");if(!user.social.friends.includes(u.uid))user.social.friends.push(u.uid);u.social=u.social||{friends:[]};u.social.friends=u.social.friends||[];if(!u.social.friends.includes(user.uid))u.social.friends.push(user.uid);user.social.rep+=2;r(`🤝 ${name(u)} added as a friend.\n⭐ Rep +2`)}},
+{name:"removefriend",aliases:["unfriend"],run:async({args})=>{let uid=String(args[0]||"");user.social.friends=user.social.friends.filter(x=>x!==uid);let u=find(uid);if(u?.social?.friends)u.social.friends=u.social.friends.filter(x=>x!==user.uid);r("💔 Friendship removed.")}},
+{name:"post",aliases:["statuspost"],run:async({args})=>{let text=args.join(" ").slice(0,300);if(!text)return r("📝 Write something: !post <text>");user.social.posts.unshift({text,time:Date.now(),likes:0,author:user.uid});user.social.posts=user.social.posts.slice(0,20);r(`📢 POSTED\n“${text}”\n❤️ 0 likes`)}},
+{name:"posts",aliases:["feed"],run:async()=>{let arr=[];for(const u of users.values())for(const p of (u.social?.posts||[]).slice(0,3))arr.push({u,p});arr.sort((a,b)=>b.p.time-a.p.time);r("📰 SOCIAL FEED\n"+(arr.slice(0,10).map(x=>`👤 ${name(x.u)}\n${x.p.text}\n❤️ ${x.p.likes||0}\n`).join("\n")||"No posts yet."))}},
+{name:"like",aliases:["love"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");let p=u.social?.posts?.[0];if(!p)return r("❌ No post found.");p.likes=(p.likes||0)+1;u.social.likes=(u.social.likes||0)+1;user.social.rep++;r(`❤️ You liked ${name(u)}'s latest post.\n⭐ Rep +1`)}},
+{name:"likes",aliases:["likestats"],run:async()=>r(`❤️ Total Likes: ${user.social.likes||0}`)},
+{name:"compliment",aliases:["praise"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");let x=["🔥 You are seriously awesome!","👑 Absolute legend!","💎 You're built different!","🚀 Keep shining!","❤️ Your energy is unmatched!"];r(`💌 ${name(u)}: ${x[Math.floor(Math.random()*x.length)]}`);u.social=u.social||{rep:0};u.social.rep=(u.social.rep||0)+3}},
+{name:"roast",aliases:["burn"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");let x=["😂 Bro needs a software update.","💀 Even Google can't find your logic.","🤣 Your Wi-Fi has more connection than you.","😭 You came with confidence and forgot the skills.","💀 The loading bar gave up on you."];r(`🔥 ${name(u)}: ${x[Math.floor(Math.random()*x.length)]}`)}},
+{name:"ship",aliases:["couple"],run:async({args})=>{let a=find(args[0]),b=find(args[1]);if(!a||!b)return r("❤️ Use !ship <uid1> <uid2>");let p=Math.floor(Math.random()*101);r(`❤️ SHIP CHECK\n👤 ${name(a)} + 👤 ${name(b)}\n💘 Compatibility: ${p}%\n${p>75?"🔥 Powerful connection!":p>45?"💕 Interesting match!":"😂 Friendship might be safer."}`)}},
+{name:"match",aliases:["compatibility"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");let p=Math.floor(Math.random()*101);r(`💘 MATCH WITH ${name(u)}\n❤️ ${p}% compatibility`) }},
+{name:"rate",aliases:["rating"],run:async({args})=>{let u=find(args[0]);if(!u)return r("❌ User not found.");let p=Math.floor(Math.random()*6)+5;r(`⭐ ${name(u)} rating: ${p}/10`) }},
+{name:"truth",aliases:["truthgame"],run:async()=>{let x=["What is your biggest goal?","Who inspires you most?","What is one thing you want to change?","What is your funniest memory?","What would you do with $1M?"];r("🎭 TRUTH\n"+x[Math.floor(Math.random()*x.length)])}},
+{name:"dare",aliases:["daregame"],run:async()=>{let x=["Send a funny sticker 😂","Change your status for 10 minutes.","Compliment someone in the group.","Tell everyone a funny story.","Use only emojis for your next message."];r("🎭 DARE\n"+x[Math.floor(Math.random()*x.length)])}},
+{name:"8ball",aliases:["askball"],run:async()=>{let x=["🎱 Definitely!","🎱 Probably.","🎱 Ask again later.","🎱 Not looking good.","🎱 Absolutely not.","🎱 The universe says yes!"];r(x[Math.floor(Math.random()*x.length)])}},
+{name:"dicegame",aliases:["socialdice"],run:async()=>r(`🎲 You rolled ${Math.floor(Math.random()*6)+1}!`)},
+{name:"compliments",aliases:["kindness"],run:async()=>r("❤️ KINDNESS BOOST\nGive someone a compliment today.\n✨ Positive energy increases community reputation.")},
+{name:"leaderboard",aliases:["sociallb"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.social?.rep||0)-(x.social?.rep||0)).slice(0,10);r("❤️ SOCIAL LEADERBOARD\n"+a.map((u,i)=>`${i+1}. ${name(u)} — ⭐${u.social?.rep||0}`).join("\n"))}},
+{name:"friendrank",aliases:["friendlb"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.social?.friends?.length||0)-(x.social?.friends?.length||0)).slice(0,10);r("🤝 FRIEND RANK\n"+a.map((u,i)=>`${i+1}. ${name(u)} — 👥${u.social?.friends?.length||0}`).join("\n"))}},
+{name:"followrank",aliases:["followlb"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.social?.followers?.length||0)-(x.social?.followers?.length||0)).slice(0,10);r("❤️ FOLLOWER RANK\n"+a.map((u,i)=>`${i+1}. ${name(u)} — 👥${u.social?.followers?.length||0}`).join("\n"))}},
+{name:"postrank",aliases:["postlb"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.social?.posts?.length||0)-(x.social?.posts?.length||0)).slice(0,10);r("📢 POST RANK\n"+a.map((u,i)=>`${i+1}. ${name(u)} — 📝${u.social?.posts?.length||0}`).join("\n"))}},
+{name:"sociallevel",aliases:["socialxp"],run:async()=>{let lv=Math.max(1,Math.floor(user.social.rep/50)+1);r(`❤️ Social Level: ${lv}\n⭐ Rep: ${user.social.rep}`)}},
+{name:"socialquest",aliases:["socialmission"],run:async()=>{user.social.rep+=5;r("❤️ SOCIAL QUEST COMPLETE!\n⭐ Rep +5\n🤝 Keep interacting with the community.")}},
+{name:"dailychat",aliases:["chatbonus"],run:async()=>{let now=Date.now(),last=user.social.lastDaily||0;if(now-last<86400000)return r("⏳ You already claimed today's social bonus.");user.social.lastDaily=now;user.social.rep+=10;user.wallet=(user.wallet||0)+5000;r("❤️ DAILY SOCIAL BONUS\n⭐ Rep +10\n💰 +$5,000")}},
+{name:"socialstats",aliases:["socialinfo"],run:async()=>r(`❤️ SOCIAL STATS\n⭐ Rep: ${user.social.rep}\n❤️ Likes: ${user.social.likes}\n👥 Followers: ${user.social.followers.length}\n❤️ Following: ${user.social.following.length}\n🤝 Friends: ${user.social.friends.length}\n📝 Posts: ${user.social.posts.length}`)},
+{name:"socialsearch",aliases:["finduser"],run:async({args})=>{let q=args.join(" ").toLowerCase();let a=[...users.values()].filter(u=>(u.name||"").toLowerCase().includes(q)||String(u.uid).includes(q)).slice(0,10);r("🔎 USER SEARCH\n"+(a.map(u=>`• ${name(u)} — ${u.uid}`).join("\n")||"No users found."))}},
+{name:"socialreset",aliases:["resetsocial"],run:async()=>{user.social={rep:0,likes:0,followers:[],following:[],friends:[],posts:[],streak:0};r("🔄 Social profile reset.")}},
+{name:"socialhelp",aliases:["helpme"],run:async()=>r("❤️ SOCIALHUB\n!me !bio !status !friends !followers !following\n!follow <uid> !unfollow <uid> !addfriend <uid>\n!post <text> !posts !like <uid>\n!compliment <uid> !roast <uid> !ship <uid> <uid>\n!leaderboard !socialstats !socialsearch <name>")}
 ];
 return cmds;
 };
