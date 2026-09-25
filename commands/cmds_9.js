@@ -1,52 +1,45 @@
-// commands/cmds_9.js // 🎰 CASINO & GAMBLE — iKON-BOT
+// commands/cmds_9.js
+// 🎰 LUCKYVAULT — iKON-BOT
 module.exports=({api,event,user,reply,users,profile,fun})=>{
 const r=t=>api.sendMessage(t,event.threadID,()=>{},event.messageID);
-user.crime=user.crime||{rep:0,heat:0,success:0,fail:0,heists:0,crew:[],rank:1};
-user.heists=user.heists||[];
-user.safehouse=user.safehouse||{level:1};
-user.blackmarket=user.blackmarket||{};
-user.inventory=user.inventory||{};
-user.casino=user.casino||{wins:0,loss:0,streak:0,highscore:0};
-user.wallet=user.wallet||0;
-const jobs={casino:[100,5000,10],gamble:[100,10000,15],coinflip:[50,2000,10],dice:[100,3000,15],slots:[200,8000,20],roulette:[500,15000,25],blackjack:[1000,20000,30],poker:[1000,25000,35],baccarat:[1500,30000,40]};
-const crime=(id)=>jobs[String(id||"").toLowerCase()];
+user.casino=user.casino||{wins:0,losses:0,wagered:0,won:0,level:1,streak:0};
+const bet=(x)=>Math.max(1,parseInt(x)||0),money=(n)=>`$${Math.floor(n).toLocaleString()}`;
 const cmds=[
-{name:"casino",aliases:["casinomenu"],run:async()=>r("🎰 CASINO & GAMBLE\n!gamble!bet!risk!cashout\n!coinflip!dice!slots!roulette\n!blackjack!poker!baccarat!baccaratplus\n!rps!guess!lottery!lotto!wheel!spin!jackpot\n!keno!crash!streak!highscore!tournament")},
-{name:"gamble",aliases:["betgame"],run:async()=>doCrime("gamble")},
-{name:"bet",aliases:["wager"],run:async()=>doCrime("gamble")},
-{name:"risk",aliases:["highrisk"],run:async()=>doCrime("gamble")},
-{name:"cashout",aliases:["cash"],run:async()=>r(`💰 CASHOUT\n💵 Wallet: $${user.wallet.toLocaleString()}\n🏦 Bank: $${(user.bank||0).toLocaleString()}\n🔥 Streak: ${user.casino.streak}`)},
-{name:"coinflip",aliases:["cf","flip"],run:async()=>doCrime("coinflip")},
-{name:"dice",aliases:["roll"],run:async()=>doCrime("dice")},
-{name:"slots",aliases:["slot"],run:async()=>doCrime("slots")},
-{name:"roulette",aliases:["roul"],run:async()=>doCrime("roulette")},
-{name:"blackjack",aliases:["bj","21"],run:async()=>doCrime("blackjack")},
-{name:"poker",run:async()=>doCrime("poker")},
-{name:"baccarat",aliases:["bacc"],run:async()=>doCrime("baccarat")},
-{name:"baccaratplus",aliases:["baccplus"],run:async()=>doCrime("baccarat")},
-{name:"rps",aliases:["rockpaper"],run:async({args})=>{let p=(args[0]||"").toLowerCase();let o=["rock","paper","scissors"][Math.floor(Math.random()*3)];if(!p)return r(`✂️ RPS\n${o} - Choose rock/paper/scissors`);let win=(p==="rock"&&o==="scissors")||(p==="paper"&&o==="rock")||(p==="scissors"&&o==="paper");if(p===o)r(`✂️ RPS\nYou: ${p} | Bot: ${o}\n🤝 Draw!`);else if(win){user.wallet+=500;user.casino.wins++;r(`✂️ RPS\nYou: ${p} | Bot: ${o}\n✅ You win +$500`)}else{user.casino.loss++;r(`✂️ RPS\nYou: ${p} | Bot: ${o}\n❌ You lost`)}}},
-{name:"guess",aliases:["guessnumber"],run:async({args})=>{let n=Math.floor(Math.random()*10)+1;let g=parseInt(args[0]);if(!g)return r("🤔 GUESS\nGuess 1-10:!guess <number>");if(g===n){user.wallet+=1000;r(`🤔 GUESS\nNumber was ${n} - CORRECT! +$1000`)}else{r(`🤔 GUESS\nNumber was ${n} - Wrong!`)}}},
-{name:"lottery",aliases:["lotto"],run:async()=>doCrime("gamble")},
-{name:"lotto",run:async()=>doCrime("gamble")},
-{name:"wheel",aliases:["wheelspin"],run:async()=>doCrime("slots")},
-{name:"spin",run:async()=>doCrime("slots")},
-{name:"jackpot",aliases:["jack"],run:async()=>{let win=Math.random()<0.08;if(win){let cash=Math.floor(Math.random()*100000)+50000;user.wallet+=cash;user.casino.wins++;r(`💰💎 JACKPOT HIT!\n💵 +$${cash.toLocaleString()}\n${fun()}`)}else{user.casino.loss++;r("💰 JACKPOT\nNo win this time. Try again!")}}},
-{name:"keno",run:async()=>doCrime("dice")},
-{name:"crash",aliases:["crashgame"],run:async()=>{let mult=(Math.random()*5+0.1).toFixed(2);let crash=parseFloat(mult)<1.5;if(!crash){let cash=Math.floor(parseFloat(mult)*1000);user.wallet+=cash;r(`📈 CRASH x${mult}\n💰 +$${cash} - You cashed out!`)}else{r(`📈 CRASH x${mult}\n💥 Crashed! You lost.`)}}},
-{name:"streak",run:async()=>r(`🔥 WIN STREAK\nCurrent: ${user.casino.streak}\n🏆 Wins: ${user.casino.wins}\n💥 Loss: ${user.casino.loss}`)},
-{name:"highscore",aliases:["topscore"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.casino?.wins||0)-(x.casino?.wins||0)).slice(0,10);r("🏆 CASINO LEADERBOARD\n"+a.map((u,i)=>`${i+1}. ${u.name||u.uid} — 🏆${u.casino?.wins||0}`).join("\n"))}},
-{name:"tournament",aliases:["tourney"],run:async()=>r("🏆 TOURNAMENT\n!casino!gamble!slots\nCompete for top wins!")},
-{name:"games",aliases:["gamelist"],run:async()=>r("🎮 GAMES & MINIGAMES\n!casino!coinflip!dice!slots!rps!guess\n!crash!wheel!jackpot")},
-{name:"minigames",run:async()=>r("🎮 MINIGAMES\n!rps!guess!coinflip!dice\nQuick fun games.")},
-{name:"profile",aliases:["me"],run:async({args})=>{let uid=args[0]||event.senderID;let p=await profile(api,uid);r(`👤 ${p.name}\n🆔 ${p.uid}\n💰 $${(users.get(uid)?.wallet||0).toLocaleString()}\n🏆 Casino Wins: ${users.get(uid)?.casino?.wins||0}`)}},
-{name:"user",run:async({args})=>{let uid=args[0]||event.senderID;let p=await profile(api,uid);r(`👤 ${p.name}\n🆔 ${p.uid}\n🔗 ${p.profileUrl||"No link"}`)}},
-{name:"uid",aliases:["id","myid"],run:async({args})=>{let uid=args[0]||event.senderID;let p=await profile(api,uid);r(`🆔 ${p.name}\n${p.uid}`)}},
-{name:"avatar",aliases:["av"],run:async({args})=>{let uid=args[0]||event.senderID;let p=await profile(api,uid);r(`🖼️ ${p.name}\n${p.avatar||"No avatar"}\n🔗 ${p.profileUrl||""}`)}},
-{name:"rep",run:async()=>r(`🏆 Reputation: ${user.reputation||0}\n⭐ Casino Rep: ${user.crime.rep}`)},
-{name:"statusmsg",run:async({args})=>{if(args.length){user.statusmsg=args.join(" ");r(`📝 Status set: ${user.statusmsg}`)}else{r(`📝 Status: ${user.statusmsg||"No status"}`)}}},
-{name:"friends",aliases:["friendlist"],run:async()=>r(`👥 Friends: ${user.friends?.length||0}\nUse!friend <uid> to add.`)},
-{name:"friend",aliases:["addfriend"],run:async({args})=>{let uid=args[0];if(!uid)return r("❌ Use!friend <uid>");user.friends=user.friends||[];if(!user.friends.includes(uid))user.friends.push(uid);r(`👥 Added ${uid} as friend.`)}},
-{name:"follow",run:async({args})=>{let uid=args[0]||event.senderID;r(`➕ Following ${uid}`)}},
-{name:"block",run:async({args})=>{let uid=args[0];if(!uid)return r("❌ Use!block <uid>");user.blocked=user.blocked||[];user.blocked.push(uid);r(`🚫 Blocked ${uid}`)}},
-{name:"unblock",run:async({args})=>{let uid=args[0];if(!uid)return r("❌ Use!unblock <uid>");user.blocked=(user.blocked||[]).filter(x=>x!==uid);r(`♻️ Unblocked ${uid}`)}}
-]; async function doCrime(id){let j=crime(id);if(!j)return r("❌ Game unavailable.");let win=Math.random()<0.48;if(win){let cash=Math.floor(Math.random()*(j[1]-j[0]+1))+j[0];user.wallet+=cash;user.casino.wins++;user.casino.streak++;user.casino.highscore=Math.max(user.casino.highscore,user.casino.streak);r(`🎰 ${id.toUpperCase()} WIN!\n💰 +$${cash.toLocaleString()}\n🔥 Streak: ${user.casino.streak}`)}else{user.casino.loss++;user.casino.streak=0;r(`🎰 ${id.toUpperCase()} LOST!\n💀 Try again! Streak reset.`)} } return cmds; };
+{name:"casino",aliases:["casinohelp"],run:async()=>r("🎰 LUCKYVAULT\n!gamble <amount> • !coinflip <amount> [heads/tails]\n!dice <amount> • !slots <amount> • !roulette <amount> [red/black/green]\n!blackjack <amount> • !poker <amount> • !baccarat <amount>\n!casinostats • !casinolevel • !jackpot • !casinorank")},
+{name:"gamble",aliases:["bet"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");let win=Math.random()<.48;user.wallet-=n;user.casino.wagered+=n;if(win){let p=n*2;user.wallet+=p;user.casino.won+=p;user.casino.wins++;user.casino.streak++;r(`🎰 BET WON!\n💰 Profit: ${money(n)}\n🔥 Streak: ${user.casino.streak}`)}else{user.casino.losses++;user.casino.streak=0;r(`💀 BET LOST!\n💸 -${money(n)}`)}}},
+{name:"coinflip",aliases:["coin"],run:async({args})=>{let n=bet(args[0]),pick=(args[1]||"heads").toLowerCase();if(user.wallet<n)return r("💸 Not enough cash.");let result=Math.random()<.5?"heads":"tails";user.wallet-=n;user.casino.wagered+=n;if(pick===result){user.wallet+=n*2;user.casino.wins++;user.casino.won+=n*2;r(`🪙 ${result.toUpperCase()}\n🎉 You won ${money(n)}!`)}else{user.casino.losses++;r(`🪙 ${result.toUpperCase()}\n💀 You lost ${money(n)}.`)}}},
+{name:"dice",aliases:["rolldice"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");let d=Math.floor(Math.random()*6)+1,userd=Math.floor(Math.random()*6)+1;user.wallet-=n;user.casino.wagered+=n;if(d>userd){user.wallet+=n*2;user.casino.wins++;r(`🎲 You: ${d} | House: ${userd}\n🏆 +${money(n)}`)}else{user.casino.losses++;r(`🎲 You: ${d} | House: ${userd}\n💀 You lost.`)}}},
+{name:"slots",aliases:["slot"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");user.wallet-=n;user.casino.wagered+=n;let s=["🍒","🍋","🍇","⭐","💎","7️⃣"],a=[s[Math.floor(Math.random()*s.length)],s[Math.floor(Math.random()*s.length)],s[Math.floor(Math.random()*s.length)]];let win=a[0]===a[1]&&a[1]===a[2],two=a[0]===a[1]||a[1]===a[2]||a[0]===a[2];let p=win?n*8:two?n*2:0;if(p){user.wallet+=p;user.casino.wins++;user.casino.won+=p;r(`🎰 ${a.join(" | ")}\n🔥 JACKPOT!\n💰 ${money(p)}`)}else{user.casino.losses++;r(`🎰 ${a.join(" | ")}\n💀 No win.`)}}},
+{name:"roulette",aliases:["roul"],run:async({args})=>{let n=bet(args[0]),pick=(args[1]||"red").toLowerCase();if(user.wallet<n)return r("💸 Not enough cash.");let colors=["red","black","red","black","red","black","red","black","red","black","green"],c=colors[Math.floor(Math.random()*colors.length)];user.wallet-=n;user.casino.wagered+=n;let win=pick===c,p=pick==="green"&&c==="green"?n*14:win?n*2:0;if(p){user.wallet+=p;user.casino.wins++;user.casino.won+=p;r(`🎡 ${c.toUpperCase()}\n🏆 You won ${money(p)}!`)}else{user.casino.losses++;r(`🎡 ${c.toUpperCase()}\n💀 You lost ${money(n)}.`)}}},
+{name:"blackjack",aliases:["bj"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");let p=Math.floor(Math.random()*12)+10,h=Math.floor(Math.random()*12)+10;user.wallet-=n;user.casino.wagered+=n;if(p>h&&p<=21||h>21){user.wallet+=n*2;user.casino.wins++;r(`🃏 You: ${p} | Dealer: ${h}\n🏆 WIN +${money(n)}`)}else{user.casino.losses++;r(`🃏 You: ${p} | Dealer: ${h}\n💀 LOSS -${money(n)}`)}}},
+{name:"poker",aliases:["pokergame"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");let p=Math.floor(Math.random()*100),h=Math.floor(Math.random()*100);user.wallet-=n;user.casino.wagered+=n;if(p>h){user.wallet+=n*2;user.casino.wins++;r(`🃏 Poker Score — You ${p} : ${h} House\n🏆 You win ${money(n)}!`)}else{user.casino.losses++;r(`🃏 Poker Score — You ${p} : ${h} House\n💀 You lose.`)}}},
+{name:"baccarat",aliases:["bacc"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");let p=Math.floor(Math.random()*10),b=Math.floor(Math.random()*10);user.wallet-=n;user.casino.wagered+=n;if(p>b){user.wallet+=n*2;user.casino.wins++;r(`🎴 Player ${p} | Banker ${b}\n🏆 PLAYER WINS +${money(n)}`)}else if(b>p){user.casino.losses++;r(`🎴 Player ${p} | Banker ${b}\n💀 BANKER WINS.`)}else{user.wallet+=n;r(`🎴 Player ${p} | Banker ${b}\n🤝 TIE — BET RETURNED.`)}}},
+{name:"casinostats",aliases:["gamestats"],run:async()=>r(`🎰 LUCKYVAULT STATS\n🏆 Wins: ${user.casino.wins}\n💀 Losses: ${user.casino.losses}\n💵 Wagered: ${money(user.casino.wagered)}\n💰 Won: ${money(user.casino.won)}\n🔥 Streak: ${user.casino.streak}`)},
+{name:"casinolevel",aliases:["gamblelevel"],run:async()=>{user.casino.level=Math.max(1,Math.floor(user.casino.wagered/100000)+1);r(`🎰 Casino Level: ${user.casino.level}\n💵 Wagered: ${money(user.casino.wagered)}`)}},
+{name:"casinorank",aliases:["casinolb"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.casino?.wagered||0)-(x.casino?.wagered||0)).slice(0,10);r("🎰 LUCKYVAULT RANKINGS\n"+a.map((u,i)=>`${i+1}. ${u.name||u.uid} — ${money(u.casino?.wagered||0)}`).join("\n"))}},
+{name:"jackpot",aliases:["grandjackpot"],run:async()=>{let j=Math.floor(Math.random()*900000)+100000;r(`💎 GRAND JACKPOT\n🏦 Current Pool: ${money(j)}\n🎰 Keep playing to chase it!`)}},
+{name:"highroll",aliases:["highroller"],run:async({args})=>{let n=bet(args[0])||100000;if(user.wallet<n)return r("💸 Not enough cash.");user.wallet-=n;user.casino.wagered+=n;let p=Math.random()<.35?n*3:0;if(p){user.wallet+=p;user.casino.wins++;r(`💎 HIGH ROLLER WIN!\n💰 +${money(p-n)} profit`)}else{user.casino.losses++;r(`💀 HIGH ROLLER LOSS!\n💸 -${money(n)}`)}}},
+{name:"allin",aliases:["allinbet"],run:async()=>{let n=user.wallet;if(n<1)return r("💸 Your wallet is empty.");let win=Math.random()<.45;user.wallet=0;user.casino.wagered+=n;if(win){user.wallet=n*2;user.casino.wins++;r(`🔥 ALL-IN WIN!\n💰 You now have ${money(user.wallet)}.`)}else{user.casino.losses++;r("💀 ALL-IN LOST EVERYTHING.")}}},
+{name:"double",aliases:["doublebet"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");let win=Math.random()<.4;user.wallet-=n;user.casino.wagered+=n;if(win){user.wallet+=n*2;user.casino.wins++;r(`🔥 DOUBLE HIT!\n💰 +${money(n)}`)}else{user.casino.losses++;r("💀 Double bet failed.")}}},
+{name:"lucky",aliases:["luck"],run:async()=>{let n=Math.floor(Math.random()*10000)+1000;user.wallet+=n;user.casino.won+=n;r(`🍀 LUCKY DROP!\n💰 +${money(n)}`)}},
+{name:"gambleinfo",aliases:["betinfo"],run:async()=>r("🎰 LUCKYVAULT\nAll games use your wallet balance.\nChoose your wager carefully.\n!casino shows the game menu.")},
+{name:"winrate",aliases:["winnings"],run:async()=>{let t=user.casino.wins+user.casino.losses,w=t?Math.round(user.casino.wins/t*100):0;r(`📊 WIN RATE: ${w}%\n🏆 ${user.casino.wins} wins / 💀 ${user.casino.losses} losses`)}},
+{name:"streak",aliases:["winstreak"],run:async()=>r(`🔥 CURRENT STREAK: ${user.casino.streak}`)},
+{name:"losses",aliases:["casinolosses"],run:async()=>r(`💀 Casino Losses: ${user.casino.losses}`)},
+{name:"wins",aliases:["casinowins"],run:async()=>r(`🏆 Casino Wins: ${user.casino.wins}`)},
+{name:"wagered",aliases:["totalbet"],run:async()=>r(`💵 Total Wagered: ${money(user.casino.wagered)}`)},
+{name:"casinowallet",aliases:["casinochips"],run:async()=>r(`💰 Wallet: ${money(user.wallet)}`)},
+{name:"fortunecookie",aliases:["fortune"],run:async()=>{let f=["🔥 Today feels lucky!","💎 Big opportunities are coming.","🍀 Your next game may surprise you.","🎰 Fortune favors patience.","👑 Play smart, king."];r("🔮 "+f[Math.floor(Math.random()*f.length)])}},
+{name:"risk",aliases:["riskgame"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");user.wallet-=n;user.casino.wagered+=n;let x=Math.floor(Math.random()*5)+1,p=n*x;if(x>2){user.wallet+=p;user.casino.wins++;r(`🎲 RISK x${x}\n🏆 Payout: ${money(p)}`)}else{user.casino.losses++;r(`💀 RISK x${x}\nYou lost ${money(n)}.`)}}},
+{name:"safeplay",aliases:["lowrisk"],run:async({args})=>{let n=bet(args[0]);if(user.wallet<n)return r("💸 Not enough cash.");user.wallet-=n;user.casino.wagered+=n;if(Math.random()<.7){user.wallet+=Math.floor(n*1.35);user.casino.wins++;r(`🛡️ SAFE PLAY WON\n💰 Return: ${money(n*1.35)}`)}else{user.casino.losses++;r("💀 Safe play failed.")}}},
+{name:"casinoreset",aliases:["resetcasino"],run:async()=>{user.casino={wins:0,losses:0,wagered:0,won:0,level:1,streak:0};r("🔄 Casino statistics reset.")}},
+{name:"luckyvault",aliases:["lvault"],run:async()=>r(`🎰 LUCKYVAULT\n💰 Wallet: ${money(user.wallet)}\n🏆 Wins: ${user.casino.wins}\n💀 Losses: ${user.casino.losses}\n🔥 Streak: ${user.casino.streak}\n🎯 Level: ${user.casino.level}`)},
+{name:"gamblehelp",aliases:["casinohelp2"],run:async()=>r("🎰 GAMES\n!coinflip !dice !slots !roulette\n!blackjack !poker !baccarat !gamble\n!highroll !allin !double !risk !safeplay\n📊 !casinostats !winrate !casinorank")},
+{name:"casinoresetstreak",aliases:["resetstreak"],run:async()=>{user.casino.streak=0;r("🔄 Casino streak reset.")}},
+{name:"casinofortune",aliases:["dailycasino"],run:async()=>{let n=Math.floor(Math.random()*5000)+500;user.wallet+=n;r(`🍀 Casino Fortune\n💰 Bonus: +${money(n)}`)}},
+{name:"houseedge",aliases:["edge"],run:async()=>r("🏦 HOUSE EDGE\n🎰 Games are randomized; outcomes can win or lose.\n💡 Never wager money you cannot afford to lose.")},
+{name:"casinoabout",aliases:["aboutcasino"],run:async()=>r("🎰 LUCKYVAULT — iKON-BOT\n💎 Virtual casino system\n🏆 Track wins, losses, streaks and wagers.")},
+{name:"luckyleaderboard",aliases:["luckylb"],run:async()=>{let a=[...users.values()].sort((x,y)=>(y.casino?.wins||0)-(x.casino?.wins||0)).slice(0,10);r("🍀 LUCKY LEADERBOARD\n"+a.map((u,i)=>`${i+1}. ${u.name||u.uid} — 🏆${u.casino?.wins||0}`).join("\n"))}}
+];
+return cmds;
+};
