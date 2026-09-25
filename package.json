@@ -8,11 +8,14 @@
   },
   "dependencies": {
     "ws3-fca": "latest",
-    "express": "latest",
-    "axios": "latest",
-    "canvas": "latest",
-    "fs-extra": "latest",
-    "moment-timezone": "latest"
+    "express": "^4.21.1",
+    "axios": "^1.7.7",
+    "canvas": "^2.11.2",
+    "fs-extra": "^11.2.0",
+    "moment-timezone": "^0.5.45",
+    "dotenv": "^16.4.5",
+    "@google/generative-ai": "^0.21.0",
+    "@google/genai": "^0.14.0"
   },
   "engines": {
     "node": "20.x"
