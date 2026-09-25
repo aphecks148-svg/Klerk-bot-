@@ -1,151 +1,49 @@
 // commands/cmds_7.js
-// 🚘 STREETKINGS — iKON-BOT • GTA Style
-module.exports = ({api,event,user,reply,users,profile,fun,bar})=>{
-const replyx=t=>api.sendMessage(t,event.threadID,()=>{},event.messageID);
-const fmt=n=>Number(n||0).toLocaleString();
-const money=u=>Math.floor(Number(u.wallet||0));
-const setMoney=(u,n)=>u.wallet=Math.max(0,Math.floor(n));
-const xp=(u,n=20)=>{u.xp=(u.xp||0)+n; u.level=Math.floor((u.xp||0)/1000)+1;};
-const ensure=u=>{
-  u.street=u.street||{wanted:0,jailUntil:0,robberies:0,heists:0,gang:null,rep:0,cars:[],races:0,wins:0};
-  u.wanted=u.wanted||0; u.jailUntil=u.jailUntil||0; u.gang=u.gang||null; u.cars=u.cars||[]; u.inventory=u.inventory||{};
-};
-const CARS={
-  civic:{name:"Honda Civic",price:15000,speed:120,rarity:"Common"},
-  supra:{name:"Toyota Supra",price:45000,speed:180,rarity:"Rare"},
-  gtr:{name:"Nissan GTR",price:120000,speed:220,rarity:"Epic"},
-  lambo:{name:"Lamborghini",price:350000,speed:280,rarity:"Legendary"},
-  bugatti:{name:"Bugatti Chiron",price:1200000,speed:350,rarity:"Mythic"},
-  batmobile:{name:"Batmobile",price:5000000,speed:400,rarity:"Divine"}
-};
-const chance=p=>Math.random()*100<p;
-const isJailed=u=>Number(u.jailUntil||0)>Date.now();
-
+// 🚘 STREETKINGS — iKON-BOT
+module.exports=({api,event,user,reply,users,profile,fun})=>{
+const r=t=>api.sendMessage(t,event.threadID,()=>{},event.messageID),a=(t,c)=>({name:t,aliases:c?.split(",")||[],run:async({args=[]})=>r(t+" system: "+(args.join(" ")||"ready"))});
+user.cars=user.cars||{};user.garage=user.garage||[];user.driving=user.driving||{level:1,xp:0,wins:0,losses:0};user.gta=user.gta||{cash:0,rep:0,wanted:0,heat:0};user.weapons=user.weapons||{};user.properties=user.properties||{};
+const cars={civic:["Honda Civic",25000,70],supra:["Toyota Supra",65000,90],gtr:["Nissan GTR",150000,110],r8:["Audi R8",220000,120],lambo:["Lamborghini Huracan",300000,140],ferrari:["Ferrari 488",350000,150],porsche:["Porsche 911",180000,130],mustang:["Ford Mustang",85000,100],bmw:["BMW M4",95000,105],bugatti:["Bugatti Chiron",2500000,220]};
+const car=(id)=>cars[String(id||"").toLowerCase()];
+const owned=()=>Object.keys(user.cars).filter(k=>cars[k]);
 const cmds=[
-{name:"gta",aliases:["gtahelp"],description:"GTA help",run:async()=>{
-  replyx(`🚘 STREETKINGS • GTA MODE
-━━━━━━━━━━━━
-💰!rob •!heist •!crime
-🚔!wanted •!bounty •!police
-🚓!jail •!escape •!arrest
-🏁!gang •!territory •!car
-💡 Start with!rob or!crime`)
-}},
-
-{name:"rob",aliases:["robbery"],description:"Rob a store",cooldown:30,run:async()=>{
-  ensure(user); if(isJailed(user)) return replyx(`🔒 You are in jail! ${Math.ceil((user.jailUntil-Date.now())/1000)}s left. Use!escape`);
-  let success=chance(65); if(!success){ user.wanted=(user.wanted||0)+1; user.street.wanted=(user.street.wanted||0)+1; user.xp=(user.xp||0)+10; return replyx(`🚨 ROBBERY FAILED!\n👮 Wanted +1 → ${user.wanted} stars\n💨 You escaped!`); }
-  let loot=Math.floor(Math.random()*8000)+2000+user.level*100; setMoney(user,money(user)+loot); user.street.robberies++; xp(user,25);
-  replyx(`💰 ROBBERY SUCCESS!\n🏪 Store: $${fmt(loot)}\n⭐ Wanted: ${user.wanted||0} • Robberies: ${user.street.robberies}\n${fun?fun():""}`)
-}},
-
-{name:"robbery",aliases:["rob2"],description:"Advanced robbery",cooldown:40,run:async()=>{
-  ensure(user); if(isJailed(user)) return replyx("🔒 In jail!"); if(money(user)<500) return replyx("💸 Need $500 setup");
-  setMoney(user,money(user)-500); let loot=Math.floor(Math.random()*15000)+5000; let win=chance(55);
-  if(win){ setMoney(user,money(user)+loot); xp(user,35); replyx(`💰 ROBBERY +$${fmt(loot)} (net +$${fmt(loot-500)})`); }else{ user.wanted=(user.wanted||0)+2; replyx(`🚨 FAILED! Lost $500 • Wanted +2 → ${user.wanted}`); }
-}},
-
-{name:"crime",aliases:["crimes"],description:"Commit random crime",cooldown:25,run:async()=>{
-  ensure(user); if(isJailed(user)) return replyx("🔒 Jailed!"); let crimes=["steal car","pickpocket","hack ATM","smash grab"]; let c=crimes[Math.floor(Math.random()*crimes.length)];
-  let loot=Math.floor(Math.random()*6000)+1000; setMoney(user,money(user)+loot); user.wanted=Math.min(5,(user.wanted||0)+(chance(30)?1:0));
-  replyx(`🔫 CRIME: ${c}\n💰 +$${fmt(loot)}\n⭐ Wanted: ${user.wanted}/5`)
-}},
-
-{name:"heist",aliases:["heistjob"],description:"Start a heist",cooldown:120,run:async()=>{
-  ensure(user); if(isJailed(user)) return replyx("🔒 Jailed!"); if((user.energy||100)<40) return replyx("⚡ Need 40 energy"); user.energy-=40;
-  let win=chance(45+user.level); if(win){ let loot=Math.floor(Math.random()*50000)+20000; setMoney(user,money(user)+loot); user.street.heists++; xp(user,100); user.street.rep+=10; replyx(`💎 HEIST SUCCESS!\n🏦 Bank: +$${fmt(loot)}\n🏆 Heists: ${user.street.heists}\n🔥 Rep +10\n${fun?fun():""}`); }else{ user.wanted=(user.wanted||0)+3; user.health=Math.max(0,(user.health||100)-30); replyx(`💀 HEIST FAILED!\n🚨 Wanted +3 → ${user.wanted}\n❤️ -30 HP`); }
-}},
-
-{name:"wanted",aliases:["stars"],description:"Check wanted level",run:async()=>{
-  ensure(user); let w=user.wanted||0; replyx(`🚨 WANTED: ${"⭐".repeat(w)}${"☆".repeat(5-w)} ${w}/5\n${w===0?"✅ Clean record":w<3?"⚠️ Cops watching":w<5?"🔥 SWAT alerted":"💀 MAX WANTED!"}\n${bar?bar(w,5,5):""}`)
-}},
-
-{name:"bounty",aliases:["bounties"],description:"Check bounty",run:async()=>{
-  ensure(user); let b=(user.wanted||0)*5000+ (user.street?.rep||0)*100; replyx(`💀 BOUNTY: $${fmt(b)}\nWanted: ${user.wanted||0} stars\nRep: ${user.street?.rep||0}`)
-}},
-
-{name:"police",aliases:["cops"],description:"Police status",run:async()=>{
-  ensure(user); if((user.wanted||0)===0) return replyx("👮 No police after you. Clean!");
-  if(chance(40)){ user.wanted=Math.max(0,(user.wanted||0)-1); replyx(`👮 Police lost you! Wanted → ${user.wanted}`); }else replyx(`🚔 Police chasing! Wanted: ${user.wanted} stars\n💡!escape or!bribe`)
-}},
-
-{name:"arrest",aliases:["getarrested"],description:"Get arrested",run:async()=>{
-  ensure(user); if((user.wanted||0)===0) return replyx("✅ You are clean, no arrest."); user.jailUntil=Date.now()+60000*(user.wanted||1); user.wanted=0;
-  replyx(`🚨 ARRESTED!\n🔒 Jail: ${Math.ceil((user.jailUntil-Date.now())/1000)}s\n💸 Fine: $5,000`); setMoney(user,Math.max(0,money(user)-5000));
-}},
-
-{name:"jail",aliases:["jailtime"],description:"Check jail time",run:async()=>{
-  ensure(user); if(!isJailed(user)) return replyx("✅ Not in jail."); replyx(`🔒 IN JAIL\n⏱️ ${Math.ceil((user.jailUntil-Date.now())/1000)}s left\n💡!escape (50% chance)`)
-}},
-
-{name:"escape",aliases:["jailbreak"],description:"Escape jail",cooldown:30,run:async()=>{
-  ensure(user); if(!isJailed(user)) return replyx("✅ Not jailed."); if(chance(50)){ user.jailUntil=0; xp(user,50); replyx(`🔓 ESCAPE SUCCESS!\n💨 You broke out!\n⭐ +50 XP\n${fun?fun():""}`); }else{ user.jailUntil+=30000; replyx(`🚨 ESCAPE FAILED!\n🔒 +30s added\n⏱️ Total: ${Math.ceil((user.jailUntil-Date.now())/1000)}s`); }
-}},
-
-{name:"gang",aliases:["gangs"],description:"Gang info",run:async()=>{
-  ensure(user); replyx(user.gang?`🏴 GANG: ${user.gang}\n🔥 Rep: ${user.street.rep}\nHeists: ${user.street.heists}`:`🏴 No gang. Use!gangjoin <name> or!ganginfo`)
-}},
-
-{name:"ganginfo",aliases:["ginfo"],description:"Gang details",run:async()=>{
-  replyx(`🏴 GANGS\n• Ballas — Rep 0+\n• Grove Street — Rep 100+\n• Vagos — Rep 300+\n• Mafia — Rep 1000+\n💡 Earn rep with!heist •!rob`)
-}},
-
-{name:"gangjoin",aliases:["joingang"],description:"Join gang",run:async({args})=>{
-  ensure(user); let name=args.join(" ")||"Ballas"; user.gang=name; replyx(`🏴 Joined ${name}!\n🔥 Welcome to the streets!`)
-}},
-
-{name:"gangleave",aliases:["leavegang"],description:"Leave gang",run:async()=>{
-  ensure(user); if(!user.gang) return replyx("❌ No gang."); let g=user.gang; user.gang=null; replyx(`🏳️ Left ${g}. You are solo now.`)
-}},
-
-{name:"gangwar",aliases:["war"],description:"Gang war",cooldown:60,run:async()=>{
-  ensure(user); if(!user.gang) return replyx("❌ Join a gang first!"); let win=chance(50+user.street.rep/20); if(win){ user.street.rep+=25; let loot=Math.floor(Math.random()*20000)+5000; setMoney(user,money(user)+loot); replyx(`⚔️ GANG WAR WON!\n🏴 ${user.gang} dominates!\n💰 +$${fmt(loot)}\n🔥 Rep +25`); }else{ user.health=Math.max(0,(user.health||100)-40); replyx(`💀 GANG WAR LOST!\n❤️ -40 HP\n🔥 Rep -5`); user.street.rep=Math.max(0,user.street.rep-5); }
-}},
-
-{name:"territory",aliases:["turf"],description:"Check territory",run:async()=>{
-  ensure(user); replyx(`🗺️ TERRITORY\nGang: ${user.gang||"None"}\nRep: ${user.street?.rep||0}\nTurf: ${Math.floor((user.street?.rep||0)/100)} blocks controlled`)
-}},
-
-{name:"capture",aliases:["captureturf"],description:"Capture turf",cooldown:45,run:async()=>{
-  ensure(user); if(!user.gang) return replyx("❌ Need gang!"); if((user.energy||100)<30) return replyx("⚡ Need 30 energy"); user.energy-=30;
-  if(chance(60)){ user.street.rep+=15; replyx(`🏴 TURF CAPTURED!\n🔥 Rep +15 → ${user.street.rep}`); }else replyx("💀 Capture failed! Enemy gang fought back.")
-}},
-
-{name:"car",aliases:["mycar"],description:"View main car",run:async()=>{
-  ensure(user); let c=user.cars[0]; replyx(c?`🚗 ${CARS[c]?.name||c}\nSpeed: ${CARS[c]?.speed||100} km/h\nRarity: ${CARS[c]?.rarity||"Common"}`:"🚗 No car. Use!cars then!buy <car>")
-}},
-
-{name:"cars",aliases:["carlist","garage"],description:"List cars",run:async()=>{
-  ensure(user); if(user.cars.length) replyx(`🚘 YOUR CARS\n${user.cars.map((k,i)=>`${i+1}. ${CARS[k]?.name||k} — ${CARS[k]?.speed||100} km/h`).join("\n")}`);
-  else replyx(`🚘 CAR SHOP\n${Object.entries(CARS).map(([k,v])=>`• ${v.name} — $${fmt(v.price)} — ${v.speed} km/h [${v.rarity}]`).join("\n")}\n💡!buy <carname> or!cars buy <name>`)
-}},
-
-{name:"garage",aliases:["mygarage"],description:"Garage view",run:async()=>{
-  ensure(user); replyx(`🏚️ GARAGE\nCars: ${user.cars.length}/10\n${user.cars.map(k=>`• ${CARS[k]?.name||k}`).join("\n")||"Empty — buy cars with!cars"}`)
-}},
-
-{name:"race",aliases:["streetrace"],description:"Street race",cooldown:30,run:async()=>{
-  ensure(user); if(!user.cars.length) return replyx("🚗 Need a car!"); let myCar=CARS[user.cars[0]]||{speed:100}; let oppSpeed=100+Math.random()*250; let mySpeed=myCar.speed+Math.random()*50;
-  if(mySpeed>=oppSpeed){ let rew=Math.floor(Math.random()*10000)+5000; setMoney(user,money(user)+rew); user.street.wins=(user.street.wins||0)+1; user.street.races++; xp(user,30); replyx(`🏁 RACE WON!\n🚗 ${myCar.name} ${Math.floor(mySpeed)} vs ${Math.floor(oppSpeed)} km/h\n💰 +$${fmt(rew)}\n🏆 Wins: ${user.street.wins}`); }
-  else{ user.street.races++; replyx(`💀 RACE LOST!\n🚗 ${Math.floor(mySpeed)} vs ${Math.floor(oppSpeed)} km/h`); }
-}},
-
-{name:"racing",aliases:["races"],description:"Racing stats",run:async()=>{
-  ensure(user); replyx(`🏁 RACING STATS\nRaces: ${user.street?.races||0}\nWins: ${user.street?.wins||0}\nWinrate: ${user.street?.races?Math.floor(user.street.wins/user.street.races*100):0}%`)
-}},
-
-{name:"chopshop",aliases:["chop"],description:"Chop shop",run:async({args})=>{
-  ensure(user); let car=args[0]; if(!car||!user.cars.includes(car)) return replyx("Usage:!chopshop <carId>\nSells car for 60%"); let v=CARS[car]?.price||10000; user.cars=user.cars.filter(c=>c!==car); setMoney(user,money(user)+Math.floor(v*0.6)); replyx(`🔧 Chopped ${CARS[car]?.name||car} for $${fmt(Math.floor(v*0.6))}`)
-}},
-
-{name:"tuner",aliases:["tuning"],description:"Tune car",run:async({args})=>{
-  ensure(user); if(!user.cars.length) return replyx("No car"); let cost=15000; if(money(user)<cost) return replyx(`Need $${fmt(cost)}`); setMoney(user,money(user)-cost); let car=user.cars[0]; if(CARS[car]) CARS[car].speed+=10; replyx(`🔧 Tuned ${CARS[car]?.name||car}! Speed +10 → ${CARS[car]?.speed||"?"} km/h`)
-}},
-
-{name:"nitro",aliases:["nos"],description:"Use nitro",run:async()=>{
-  ensure(user); if((user.inventory.nitro||0)<1 && money(user)<2000) return replyx("💨 Need Nitro ($2k)"); if((user.inventory.nitro||0)>=1) user.inventory.nitro--; else setMoney(user,money(user)-2000);
-  replyx(`💨 NITRO BOOST!\n🚗 Next race +50 speed boost!\n${fun?fun():""}`); user.street.nitroBoost=50;
-}}
+{name:"garage",aliases:["cars"],run:async()=>r("🚘 GARAGE\n"+(owned().length?owned().map(k=>`• ${cars[k][0]} ⚡${cars[k][2]}`).join("\n"):"Empty garage.") )},
+{name:"carshop",aliases:["dealership"],run:async()=>r("🚘 STREETKINGS DEALERSHIP\n"+Object.entries(cars).map(([k,v])=>`• ${k} — ${v[0]} | $${v[1].toLocaleString()} | ⚡${v[2]}`).join("\n"))},
+{name:"buycar",aliases:["carbuy"],run:async({args})=>{let c=car(args[0]);if(!c)return r("❌ Choose a car: "+Object.keys(cars).join(", "));if(user.wallet<c[1])return r(`💸 You need $${(c[1]-user.wallet).toLocaleString()} more.`);user.wallet-=c[1];user.cars[args[0].toLowerCase()]=1;r(`🚘🔥 You bought a ${c[0]} for $${c[1].toLocaleString()}!`)}},
+{name:"sellcar",aliases:["carsell"],run:async({args})=>{let id=String(args[0]||"").toLowerCase(),c=car(id);if(!c||!user.cars[id])return r("❌ You don't own that car.");let v=Math.floor(c[1]*.7);delete user.cars[id];user.wallet+=v;r(`💰 Sold ${c[0]} for $${v.toLocaleString()}.`)}},
+{name:"carinfo",aliases:["vehicleinfo"],run:async({args})=>{let c=car(args[0]);r(c?`🚘 ${c[0]}\n💵 $${c[1].toLocaleString()}\n⚡ Speed: ${c[2]}`:"❌ Car not found.")}},
+{name:"drive",aliases:["driving"],run:async()=>{let o=owned();if(!o.length)return r("🚘 Buy a car first with !buycar <car>.");let k=o[Math.floor(Math.random()*o.length)],c=cars[k],cash=Math.floor(Math.random()*5000)+1000;user.wallet+=cash;user.driving.xp+=20;user.gta.rep+=5;r(`🏁 ${c[0]} hit the streets!\n💰 Earned $${cash.toLocaleString()}\n⭐ Driving XP +20`)}},
+{name:"race",aliases:["streetrace"],run:async()=>{let o=owned();if(!o.length)return r("🚘 You need a car.");let c=cars[o[0]],win=Math.random()<.6;user.driving[win?"wins":"losses"]++;let cash=win?Math.floor(c[1]*.08):0;if(win)user.wallet+=cash;r(win?`🏆 STREET RACE WON!\n🚘 ${c[0]}\n💰 +$${cash.toLocaleString()}`:`💥 Race lost. Your ${c[0]} needs tuning.`)}},
+{name:"raceinfo",aliases:["racehelp"],run:async()=>r("🏁 STREET RACING\n!race • !drive • !tune • !upgradecar\n!racerank • !carinfo <car>")},
+{name:"tune",aliases:["tuning"],run:async()=>{let o=owned();if(!o.length)return r("❌ Buy a car first.");let cost=15000;if(user.wallet<cost)return r("💸 Tuning costs $15,000.");user.wallet-=cost;user.driving.xp+=50;r("🔧 Car tuned! ⚡ Performance increased.")}},
+{name:"upgradecar",aliases:["carupgrade"],run:async()=>{let o=owned();if(!o.length)return r("❌ Buy a car first.");let cost=25000;if(user.wallet<cost)return r("💸 Upgrade costs $25,000.");user.wallet-=cost;user.driving.xp+=100;r("⚙️ Engine upgrade installed! 🚘🔥")}},
+{name:"racerank",aliases:["racingrank"],run:async()=>{let arr=[...users.values()].sort((a,b)=>(b.driving?.wins||0)-(a.driving?.wins||0)).slice(0,10);r("🏁 STREET RACE RANK\n"+arr.map((u,i)=>`${i+1}. ${u.name||u.uid} — 🏆${u.driving?.wins||0}`).join("\n"))}},
+{name:"drivelevel",aliases:["driverlevel"],run:async()=>r(`🚘 Driving Level: ${user.driving.level}\n⭐ XP: ${user.driving.xp}`)},
+{name:"drivexp",aliases:["driverxp"],run:async()=>r(`⭐ Driving XP: ${user.driving.xp}`)},
+{name:"wanted",aliases:["wantedlevel"],run:async()=>r(`🚨 WANTED LEVEL: ${user.gta.wanted}/5\n🔥 Heat: ${user.gta.heat}`)},
+{name:"heat",aliases:["gtaheat"],run:async()=>r(`🔥 GTA HEAT: ${user.gta.heat}\n🚨 Wanted: ${user.gta.wanted}/5`)},
+{name:"rep",aliases:["gtarep"],run:async()=>r(`⭐ STREET REP: ${user.gta.rep}`)},
+{name:"streetstats",aliases:["gtastats"],run:async()=>r(`🚘 STREETKINGS\n💰 Cash: $${user.gta.cash.toLocaleString()}\n⭐ Rep: ${user.gta.rep}\n🚨 Wanted: ${user.gta.wanted}\n🔥 Heat: ${user.gta.heat}\n🏁 Wins: ${user.driving.wins}\n💥 Losses: ${user.driving.losses}`)},
+{name:"heistcar",aliases:["carheist"],run:async()=>{let cash=Math.floor(Math.random()*25000)+5000;user.gta.cash+=cash;user.gta.heat++;user.gta.wanted=Math.min(5,user.gta.wanted+1);r(`💀 VEHICLE HEIST SUCCESS!\n💰 GTA Cash +$${cash.toLocaleString()}\n🚨 Wanted +1`) }},
+{name:"carjack",aliases:["jackcar"],run:async()=>{let cash=Math.floor(Math.random()*10000)+2000;user.gta.cash+=cash;user.gta.heat++;r(`🚘💨 Carjack complete!\n💰 GTA Cash +$${cash.toLocaleString()}\n🔥 Heat +1`) }},
+{name:"robbery",aliases:["rob"],run:async()=>{let cash=Math.floor(Math.random()*15000)+3000;user.gta.cash+=cash;user.gta.heat+=2;user.gta.wanted=Math.min(5,user.gta.wanted+1);r(`💰 ROBBERY COMPLETE!\n+$${cash.toLocaleString()} GTA Cash\n🚨 Wanted: ${user.gta.wanted}/5`)}},
+{name:"police",aliases:["cops"],run:async()=>r(`🚔 POLICE STATUS\n🚨 Wanted: ${user.gta.wanted}/5\n🔥 Heat: ${user.gta.heat}\nUse !escape or !bribe.`)},
+{name:"escape",aliases:["evade"],run:async()=>{if(!user.gta.wanted)return r("😎 You're not wanted.");let ok=Math.random()<.55;if(ok){user.gta.wanted=0;user.gta.heat=Math.max(0,user.gta.heat-3);r("🏃💨 You escaped the police!")}else{user.gta.wanted=Math.min(5,user.gta.wanted+1);r("🚨 Escape failed! Wanted level increased.")}}},
+{name:"bribe",aliases:["paycops"],run:async()=>{let cost=user.gta.wanted*10000;if(!user.gta.wanted)return r("😎 No wanted level.");if(user.wallet<cost)return r(`💸 Police bribe costs $${cost.toLocaleString()}.`);user.wallet-=cost;user.gta.wanted=0;user.gta.heat=0;r("💵 Police bribed. Wanted level cleared.")}},
+{name:"streetjob",aliases:["driverjob"],run:async()=>{let cash=Math.floor(Math.random()*8000)+2000;user.wallet+=cash;user.driving.xp+=30;r(`🚕 Street job complete!\n💰 +$${cash.toLocaleString()}\n⭐ Driving XP +30`)}},
+{name:"delivery",aliases:["deliver"],run:async()=>{let cash=Math.floor(Math.random()*6000)+1500;user.wallet+=cash;user.driving.xp+=15;r(`📦 Delivery complete!\n💰 +$${cash.toLocaleString()}`)}},
+{name:"garageupgrade",aliases:["upgradegarage"],run:async()=>{let cost=50000;if(user.wallet<cost)return r("💸 Garage upgrade costs $50,000.");user.wallet-=cost;user.garage.push({level:user.garage.length+2});r("🏢 Garage upgraded! More vehicles can be stored.")}},
+{name:"garageinfo",aliases:["garagelevel"],run:async()=>r(`🏢 Garage Slots: ${5+user.garage.length}\n🚘 Cars Owned: ${owned().length}`)},
+{name:"cartrade",aliases:["tradecar"],run:async()=>r("🤝 Car trading is available between players through the central trade system.")},
+{name:"carlist",aliases:["vehicles"],run:async()=>r("🚘 OWNED VEHICLES\n"+(owned().length?owned().map(k=>`• ${cars[k][0]}`).join("\n"):"None"))},
+{name:"streetmarket",aliases:["carmarket"],run:async()=>r("🏪 STREET MARKET\nBuy vehicles with !buycar <name>\nSell with !sellcar <name>.")},
+{name:"gta",aliases:["gtamenu"],run:async()=>r("💀 GTA SYSTEM\n!drive !race !carjack !robbery !heistcar\n!wanted !escape !bribe !rep !streetstats")},
+{name:"streetking",aliases:["streetboss"],run:async()=>{let o=owned();r(`👑 STREET KING\n🚘 Cars: ${o.length}\n🏆 Race Wins: ${user.driving.wins}\n⭐ Rep: ${user.gta.rep}`)}},
+{name:"carpower",aliases:["speed"],run:async()=>{let o=owned();if(!o.length)return r("❌ No vehicle.");let p=Math.max(...o.map(k=>cars[k][2]));r(`⚡ BEST VEHICLE POWER: ${p}`)}},
+{name:"carcollection",aliases:["carscollection"],run:async()=>r(`🚘 Collection: ${owned().length}/${Object.keys(cars).length}\n${owned().map(k=>`• ${cars[k][0]}`).join("\n")||"Empty"}`)},
+{name:"streethelp",aliases:["carhelp"],run:async()=>r("🚘 STREETKINGS\n!garage !carshop !buycar !sellcar !drive !race !tune !upgradecar\n!wanted !escape !bribe !robbery !carjack !racerank !streetstats")},
+{name:"streetcash",aliases:["gtacash"],run:async()=>r(`💵 GTA CASH: $${user.gta.cash.toLocaleString()}`)},
+{name:"streetreset",aliases:["resetgta"],run:async()=>{user.gta={cash:0,rep:0,wanted:0,heat:0};user.driving={level:1,xp:0,wins:0,losses:0};r("🔄 Street progress reset.")}}
 ];
 return cmds;
 };
