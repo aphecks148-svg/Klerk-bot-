@@ -9,13 +9,12 @@ const COOLDOWN=Number(process.env.COOLDOWN||1200);
 const GEMINI_KEY=process.env.GEMINI_API_KEY||process.env.GEMINI_KEY||"";
 const GEMINI_MODEL=process.env.GEMINI_MODEL||"gemini-1.5-flash";
 const ADMIN_UIDS=String(process.env.ADMIN_UIDS||"").split(",").map(x=>x.trim()).filter(Boolean);
-const REACTIONS=["👍","❤️","😂","🔥","👑"];
 
 let GoogleGenAI=null,geminiClient=null,Canvas=null;
 try{
   ({GoogleGenAI}=require("@google/genai"));
   if(GEMINI_KEY) geminiClient=new GoogleGenAI({apiKey:GEMINI_KEY});
-}catch(e){console.log("genai off")}
+}catch(e){}
 try{Canvas=require("canvas")}catch{try{Canvas=require("@napi-rs/canvas")}catch{}}
 app.use(express.json({limit:"2mb"}));
 
@@ -37,7 +36,7 @@ const defaultUser=uid=>({
 
 const defaultGroup=tid=>({
   threadID:String(tid),name:"Unknown Group",enabled:true,approved:false,pending:false,
-  prefix:PREFIX,welcome:true,goodbye:true,autoReact:true,antiSpam:true,
+  prefix:PREFIX,welcome:true,goodbye:true,autoReact:false,antiSpam:true,
   disabledCommands:new Set(),disabledCategories:new Set(),admins:[],
   stats:{messages:0,commands:0}
 });
@@ -70,7 +69,7 @@ function uptime(s){s=Math.floor(s);const d=Math.floor(s/86400);s%=86400;const h=
 function parse(s){const a=[],r=/"([^"]+)"|'([^']+)'|(\S+)/g;let m;while((m=r.exec(s)))a.push(m[1]||m[2]||m[3]);return a}
 function stat(n){commandStats.set(n,(commandStats.get(n)||0)+1)}
 function reply(api,event,text){return new Promise((res,rej)=>{try{api.sendMessage(String(text??""),event.threadID,e=>e?rej(e):res(),event.messageID)}catch(e){rej(e)}})}
-function react(api,event){try{api.setMessageReaction(REACTIONS[Math.floor(Math.random()*REACTIONS.length)],event.messageID,()=>{},true)}catch{}}
+
 async function getProfile(api,uid){
   uid=String(uid);
   if(profiles.has(uid)) return profiles.get(uid);
@@ -81,6 +80,7 @@ async function getProfile(api,uid){
     profiles.set(uid,z);return z;
   }catch{return{uid,name:"Unknown",firstName:"User",profileUrl:"",avatar:""}}
 }
+
 async function askGemini(prompt,user){
   if(!geminiClient) throw Error("Gemini API not configured");
   const r=await geminiClient.models.generateContent({
@@ -193,7 +193,7 @@ async function dispatch(api,event){
   if(event.messageID){if(processed.has(event.messageID)) return;processed.set(event.messageID,Date.now());setTimeout(()=>processed.delete(event.messageID),60000)}
   const p=await getProfile(api,sid),u=getUser(sid,p.name),g=getGroup(tid,event.threadName);
   u.firstName=p.firstName||u.firstName;u.profileUrl=p.profileUrl||u.profileUrl;u.avatar=p.avatar||u.avatar;
-  g.stats.messages++;react(api,event);
+  g.stats.messages++;
   const pre=g.prefix||PREFIX;
   if(!body.startsWith(pre)) return;
   const parts=parse(body.slice(pre.length).trim()),raw=norm(parts.shift());
