@@ -3,7 +3,7 @@ services:
     name: ikon-bot
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci --no-audit --no-fund
     startCommand: npm start
     healthCheckPath: /
     envVars:
