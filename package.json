@@ -15,7 +15,8 @@
     "dotenv": "^16.4.5",
     "@google/genai": "^0.14.0",
     "@napi-rs/canvas": "^0.1.65",
-    "canvas": "^3.0.1"
+    "canvas": "^3.0.1",
+    "npmlog": "^7.0.1"
   },
   "engines": {
     "node": "20.x"
