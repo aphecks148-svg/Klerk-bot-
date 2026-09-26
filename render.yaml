@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ikon-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: APPSTATE
+        sync: false
+      - key: GEMINI_KEY
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: PREFIX
+        value: "!"
+      - key: NODE_VERSION
+        value: "20"
