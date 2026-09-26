@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+data/
+appstate.json
+.replit
+.upm/
+.cache/

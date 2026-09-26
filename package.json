@@ -1,24 +1,22 @@
 {
   "name": "ikon-bot",
-  "version": "2.1.0",
-  "description": "iKON-BOT by Aphecks iKon Klerk - 500 CMDS",
+  "version": "1.0.0",
+  "description": "iKON-BOT v5.0 Divine - modular Facebook bot for Render",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "check": "node --check index.js"
   },
+  "keywords": ["facebook", "bot", "mongodb", "render"],
+  "author": "Aphecks",
+  "license": "MIT",
+  "type": "commonjs",
   "dependencies": {
-    "ws3-fca": "^1.0.0",
-    "express": "^4.21.1",
-    "axios": "^1.7.7",
-    "fs-extra": "^11.2.0",
-    "moment-timezone": "^0.5.45",
-    "dotenv": "^16.4.5",
-    "@google/genai": "^0.14.0",
-    "@napi-rs/canvas": "^0.1.65",
-    "canvas": "^3.0.1",
-    "npmlog": "^7.0.1"
-  },
-  "engines": {
-    "node": "20.x"
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.20.0",
+    "canvas": "^3.2.3",
+    "express": "^5.2.1",
+    "mongoose": "^9.10.2",
+    "ws3-fca": "^3.5.2"
   }
 }
