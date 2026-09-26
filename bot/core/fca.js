@@ -28,7 +28,13 @@ async function start(onEvent) {
         return;
       }
       if (!settled) { settled = true; resolve(api); }
-      api.listen((listenError, event) => {
+      const listen = api.listenMqtt || api.listen;
+      if (typeof listen !== "function") {
+        const listenerError = new Error("ws3-fca returned no listenMqtt listener");
+        if (!settled) { settled = true; reject(listenerError); }
+        return;
+      }
+      listen.call(api, (listenError, event) => {
         if (listenError) return console.error("[FCA] listener:", listenError.message || listenError);
         Promise.resolve(onEvent(api, event)).catch((err) => console.error("[EVENT]", err));
       });
