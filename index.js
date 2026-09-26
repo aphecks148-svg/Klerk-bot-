@@ -1,271 +1,128 @@
-// iKON-BOT • FINAL PRODUCTION INDEX // Owner: Aphecks iKon Klerk - 360 cmds
+// index.js
+require("dotenv").config();
 const fs=require("fs"),path=require("path"),express=require("express");
-try{ require("dotenv").config(); }catch(e){ console.log("dotenv skip"); }
-let login; try{ const FCA=require("ws3-fca"); login=typeof FCA==="function"?FCA:FCA.login; }catch(e){ console.error("ws3-fca missing:",e.message); process.exit(1); }
-
+const FCA=require("ws3-fca");
+const login=typeof FCA==="function"?FCA:FCA.login;
 const app=express();
-const PORT=process.env.PORT||10000;
-const GLOBAL_PREFIX=process.env.PREFIX||"!";
-const ADMIN_UIDS=new Set((process.env.ADMIN_UIDS||"").split(",").map(s=>s.trim()).filter(Boolean));
-const APPSTATE=process.env.APPSTATE||"";
+const PORT=process.env.PORT||1000,PREFIX=process.env.PREFIX||"!",APPSTATE=process.env.APPSTATE||"./appstate.json";
+const ADMIN_UIDS=String(process.env.ADMIN_UIDS||"").split(",").map(x=>x.trim()).filter(Boolean);
+const COOLDOWN=Number(process.env.COOLDOWN||1200),AUTO_REACT=process.env.AUTO_REACT||"👍";
+const users=new Map(),groups=new Map(),commands=new Map(),aliases=new Map(),cooldowns=new Map(),spam=new Map(),commandStats=new Map(),profiles=new Map(),processed=new Map();
+global.users=users;global.groups=groups;global.commands=commands;
 
-app.get("/",(_,res)=>res.json({status:"ACTIVE",bot:"iKON-BOT",prefix:GLOBAL_PREFIX,commands:360}));
-app.get("/health",(_,res)=>res.json({ok:true,uptime:process.uptime()}));
+const DEFAULT_USER=uid=>({uid:String(uid),name:"Unknown",firstName:"User",profileUrl:"",avatar:"",wallet:100000,bank:0,vault:0,savings:0,cash:100000,level:1,xp:0,prestige:0,health:100,maxHealth:100,energy:100,maxEnergy:100,stamina:100,maxStamina:100,reputation:0,credit:500,wanted:0,jailUntil:0,job:null,inventory:{},pets:[],cars:[],weapons:[],businesses:[],properties:[],achievements:[],skills:{},equipment:{weapon:null,armor:null},stats:{},warnings:0,admin:false});
+const DEFAULT_GROUP=(tid,name)=>({threadID:String(tid),name:name||"Unknown Group",enabled:true,prefix:PREFIX,welcome:true,goodbye:true,autoReact:true,antiSpam:true,disabledCommands:new Set(),disabledCategories:new Set(),admins:[],stats:{messages:0,commands:0}});
 
-const users=new Map(),groups=new Map(),commands=new Map(),aliases=new Map();
-const cooldowns=new Map(),profiles=new Map();
+function getUser(uid,name){uid=String(uid);if(!users.has(uid))users.set(uid,DEFAULT_USER(uid));let u=users.get(uid);if(name&&(!u.name||u.name==="Unknown"))u.name=name;return u}
+function getGroup(tid,name){tid=String(tid);if(!groups.has(tid))groups.set(tid,DEFAULT_GROUP(tid,name));let g=groups.get(tid);if(name&&name!=="Unknown Group")g.name=name;return g}
+function reply(api,event,text){return api.sendMessage(String(text),event.threadID,()=>{},event.messageID)}
+async function profile(api,uid){uid=String(uid);if(profiles.has(uid))return profiles.get(uid);try{const x=await new Promise((res,rej)=>api.getUserInfo(uid,(e,d)=>e?rej(e):res(d)));const p=x&&x[uid]?x[uid]:x||{};const z={uid,name:p.name||p.fullName||"Unknown",firstName:p.firstName||p.name||"User",profileUrl:p.profileUrl||p.vanity||"",avatar:p.thumbSrc||p.url||p.photo||""};profiles.set(uid,z);return z}catch(e){return{uid,name:"Unknown",firstName:"User",profileUrl:"",avatar:""}}}
+function isAdmin(uid,u){return ADMIN_UIDS.includes(String(uid))||u.admin===true}
+function parse(s){const a=[],r=/"([^"]+)"|'([^']+)'|(\S+)/g;let m;while((m=r.exec(s)))a.push(m[1]||m[2]||m[3]);return a}
+function norm(x){return String(x||"").trim().toLowerCase()}
+function stat(name){commandStats.set(name,(commandStats.get(name)||0)+1)}
+function commandList(){return [...commands.keys()].sort()}
+function menu(u,g){return`✨ iKON-BOT • MENU\n👑 Aphecks iKon Klerk\n👤 ${u.name} • ⭐ Lv.${u.level||1} • 🔥 P${u.prestige||0} • 💰 $${Number(u.wallet||0).toLocaleString()}\n❤️ ${u.health||100}/${u.maxHealth||100} • ⚡ ${u.energy||100}/${u.maxEnergy||100}\n━━━━━━━━━━━━━━━━━━\n💰 MONEYFORGE: balance • deposit • withdraw • transfer • work • job • invest\n🛒 MARKETVERSE: shop • buy • sell • inventory • craft • market • trade\n🐾 WILDHEART: pet • pets • adopt • feed • train • evolve • petbattle\n🌾 EARTHBOUND: farm • plant • water • harvest • seeds • grow • farmupgrade\n⛏️ FRONTIER: mine • ores • fish • hunt • explore • gather • smelt\n⚔️ BATTLECORE: stats • skills • battle • attack • defend • dungeon • raid • boss\n🚘 STREETKINGS: garage • carshop • drive • race • wanted • police • robbery\n💀 UNDERWORLD: crime • heist • crew • blackmarket • safehouse • hit\n🎰 LUCKYVAULT: casino • gamble • slots • roulette • blackjack • poker\n❤️ SOCIALHUB: me • bio • friends • follow • post • like • truth • dare\n🤖 NEURALINK/ARENA: ai • ask • translate • football • fixtures • standings\n👑 KLERKCORE/SYSTEM: admin • settings • pending • warn • kick • ban • system\n━━━━━━━━━━━━━━━━━━\n📖 ${g.prefix}help <cmd> • 🔎 ${g.prefix}search <word> • 📋 ${g.prefix}commands`}
 
-const CAT={
- MONEYFORGE:["💰","MONEYFORGE"],MARKETVERSE:["🛒","MARKETVERSE"],WILDHEART:["🐾","WILDHEART"],
- EARTHBOUND:["🌾","EARTHBOUND"],FRONTIER:["⛏️","FRONTIER"],BATTLECORE:["⚔️","BATTLECORE"],
- STREETKINGS:["🚘","STREETKINGS"],UNDERWORLD:["💀","UNDERWORLD"],LUCKYVAULT:["🎰","LUCKYVAULT"],
- SOCIALHUB:["❤️","SOCIALHUB"],NEURALINK:["🤖","NEURALINK"],ARENA360:["⚽","ARENA360"],
- KLERKCORE:["👑","ONLYADMIN"],SYSTEMHUB:["🛠️","SYSTEMHUB"]
-};
-
-const MENU1={
- MONEYFORGE:`balance deposit withdraw transfer daily weekly monthly work job jobs salary beg invest loan credit business property networth tax payday bonus cashdrop bankinterest savings vault`,
- MARKETVERSE:`shop buy sell inventory use trade market auction items prices iteminfo materials storage stash gift give exchange bundle restock rarity blueprint salvage`,
- WILDHEART:`pet pets adopt petinfo feed train evolve petbattle pettrade release petstats petlevel petxp petheal petpower petduel petgift petrename petcollection petrare petlist petbreed petmerge petrevive petarmor petweapon petquest petmission petfood petgear`,
- EARTHBOUND:`farm plant seeds water harvest fertilize farminfo field crop crops garden greenhouse grow replant farmshop farmsell farmupgrade farmlevel farmxp farmlog compost irrigation fertilizerbox cropinfo harvestall farmquest`,
- FRONTIER:`mine ores oreinfo dig excavate prospect smelt forge fish bait fishing fishinfo hunt animals tracking trap catch cook camp explore gather resources fishingrod fishinglevel fishingquest huntingrank miningrank cave map`,
- BATTLECORE:`stats level xp skills skilltree upgrade prestige rebirth battle attack defend ultimate pvp arena dungeon raid boss bossfight adventure quest quests mission missions equipment loadout power combat heal energy defense dodge critical combo rage mana armor weaponrank bossrank raidrank arenaRank battlepass bountyxp`
-};
-const MENU2={
- STREETKINGS:`gta rob robbery crime heist wanted bounty police arrest jail escape gang ganginfo gangjoin gangleave gangwar territory capture car cars garage race racing chopshop tuner nitro`,
- UNDERWORLD:`smuggle blackmarket hit assassinate kidnap extort bribe fence contraband stashhouse safehouse crew contract target heat hideout streetrep ransom informant`,
- LUCKYVAULT:`casino gamble coinflip dice slots roulette blackjack poker baccarat rps guess lottery lotto wheel spin jackpot bet highscore games minigames tournament risk cashout streak crash keno baccaratplus`,
- SOCIALHUB:`profile me user uid avatar rep friends friend follow block unblock marry divorce partner couple pair crush slap kiss hug poke gift spy roast compliment ship social statusmsg`,
- NEURALINK:`ai ask chat imagine image translate summarize define search weather calc convert qrcode youtube music video sticker gif meme caption rewrite prompt explain`,
- ARENA360:`football live livescore fixtures results match team teams league leagues standings table footballnews wrestling wrestlingnews wwe ufc sports score player`,
- KLERKCORE:`admin settings enable disable maintenance broadcast reload logs stats pending approve reject pendinggc approvegc rejectgc warn warnings kick ban unban`,
- SYSTEMHUB:`menu menu1 menu2 commands cmd botinfo ping uptime groupinfo members admins rules id myid status report suggest feedback support prefix slowmode antispam announce`
-};
-
-function addCatalog(menu,n){
- let c=0; for(const [cat,str] of Object.entries(menu)){
-  for(const name of str.split(/\s+/).filter(Boolean)){
-   commands.set(name.toLowerCase(),{name:name.toLowerCase(),category:cat,aliases:[],catalog:true});
-   c++;
+function register(file,mod){
+ let arr=Array.isArray(mod)?mod:(typeof mod==="function"?[mod]:mod&&Array.isArray(mod.commands)?mod.commands:[]);
+ for(const c of arr){
+  if(!c)continue;
+  const names=[c.name,...(c.aliases||[])].filter(Boolean).map(norm);
+  if(!names.length)continue;
+  const fn=typeof c==="function"?c:(c.run||c.execute||c.handler);
+  if(typeof fn!=="function")continue;
+  const main=names[0];
+  if(commands.has(main)){console.log(`⚠️ DUPLICATE COMMAND: ${main} ← ${file}`);continue}
+  commands.set(main,{...c,name:main,run:fn,file});
+  for(const a of names.slice(1)){
+   if(commands.has(a)||aliases.has(a)){console.log(`⚠️ DUPLICATE ALIAS: ${a} ← ${file}`);continue}
+   aliases.set(a,main)
   }
- } console.log(`📋 MENU ${n}: ${c} commands`); return c;
-}
-const C1=addCatalog(MENU1,1),C2=addCatalog(MENU2,2);
-console.log(`✅ ${C1+C2} catalog loaded`);
-
-// ===== CORE STATE =====
-function getUser(uid,name="Unknown"){
- if(!users.has(uid)) users.set(uid,{uid,name,firstName:name,wallet:500,bank:0,xp:0,level:1,prestige:0,health:100,energy:100,inventory:{},pets:[],warnings:0,banned:false});
- return users.get(uid);
-}
-function getGroup(tid,name="Unknown"){
- if(!groups.has(tid)) groups.set(tid,{threadID:tid,name,enabled:true,prefix:GLOBAL_PREFIX,admins:new Set(),disabledCommands:new Set(),stats:{messages:0,commands:0}});
- return groups.get(tid);
-}
-function isAdmin(uid){ if(ADMIN_UIDS.size===0) return true; return ADMIN_UIDS.has(String(uid)); }
-
-async function getProfile(api,uid){
- uid=String(uid);
- if(profiles.has(uid)) return profiles.get(uid);
- let p={uid,name:"Unknown",firstName:"Unknown",profileUrl:"",avatar:""};
- try{ const info=await api.getUserInfo(uid); const u=info[uid]; if(u) p={uid,name:u.name||"Unknown",firstName:u.firstName||u.name,profileUrl:u.profileUrl||"",avatar:u.thumbSrc||""}; }catch(_){}
- profiles.set(uid,p); getUser(uid,p.name).name=p.name; return p;
-}
-
-const fun=()=>["🔥 AYOOO!","🐐 GOAT move!","🚀 Cooking!","💀 SHEESH!","😎 Clean!"][Math.floor(Math.random()*5)];
-const bar=(v,m=100,n=10)=>{ v=Math.max(0,Math.min(m,v)); const x=Math.round(v/m*n); return "█".repeat(x)+"░".repeat(n-x); };
-
-// ===== REPLY + REACT - FIXED =====
-function reply(api,event,msg){
- const text=String(msg);
- console.log(`💬 SENDING to ${event.threadID}: ${text.slice(0,120)}`);
- return new Promise((resolve)=>{
-  api.sendMessage(text, event.threadID, (err,info)=>{
-   if(err){ console.error("❌ SEND FAILED:",err); resolve(null); }
-   else{ console.log("✅ SENT:",info?.messageID); resolve(info); }
-  }, event.messageID);
- });
-}
-function react(api,event,emoji="👍"){ try{ api.setMessageReaction(emoji,event.messageID,()=>{},true); }catch(_){} }
-
-// ===== COMMAND REGISTER =====
-function registerCommand(c){
- if(!c||!c.name) return;
- const name=String(c.name).toLowerCase().trim();
- const existing=commands.get(name);
- if(existing && existing.catalog){
-  commands.set(name,{...existing,...c,name,category:c.category||existing.category,catalog:false});
- }else if(existing &&!existing.catalog){
-  console.log(`⚠️ DUPLICATE CMD: ${name}`); return;
- }else{
-  commands.set(name,{...c,name,catalog:false});
- }
- for(const a of (c.aliases||[])){
-  const al=String(a).toLowerCase().trim(); if(!aliases.has(al)) aliases.set(al,name);
  }
 }
 
 function loadCommands(){
+ commands.clear();aliases.clear();
  const dir=path.join(__dirname,"commands");
- if(!fs.existsSync(dir)){ console.log("No commands dir"); return; }
- const files=fs.readdirSync(dir).filter(f=>/^cmds_\d+\.js$/i.test(f)).sort((a,b)=>parseInt(a.match(/\d+/)[0])-parseInt(b.match(/\d+/)[0]));
- for(const file of files){
-  try{
-   delete require.cache[require.resolve(path.join(dir,file))];
-   const mod=require(path.join(dir,file));
-   let list=[];
-   if(typeof mod==="function"){
-    const ctx={api:{},event:{senderID:"0",threadID:"0",messageID:"",body:""},user:getUser("0"),reply:()=>{},users,profile:getProfile,fun,bar,isAdmin,PREFIX:GLOBAL_PREFIX,usersMap:users};
-    const res=mod(ctx); if(Array.isArray(res)) list=res;
-   }else{
-    list=Array.isArray(mod)?mod:(mod.commands||[mod]);
-   }
-   list.filter(Boolean).forEach(registerCommand);
-   console.log(`📦 ${file} -> ${list.length} cmds | total ${commands.size}`);
-  }catch(e){ console.error(`❌ ${file}:`,e.message); }
+ if(!fs.existsSync(dir))fs.mkdirSync(dir,{recursive:true});
+ const files=fs.readdirSync(dir).filter(x=>/^cmds_\d+\.js$/i.test(x)).sort((a,b)=>Number(a.match(/\d+/)[0])-Number(b.match(/\d+/)[0]));
+ for(const f of files){
+  try{const p=path.join(dir,f);delete require.cache[require.resolve(p)];register(f,require(p));console.log(`📦 ${f} loaded`)}
+  catch(e){console.log(`❌ ${f}: ${e.message}`)}
  }
+ console.log(`✅ ${commands.size} commands • ${aliases.size} aliases`)
 }
 loadCommands();
 
-// ===== MENU =====
-const icon=c=>CAT[c]?.[0]||"📌"; const title=c=>CAT[c]?.[1]||c;
-function menuPage(which,e){
- const src=which===1?MENU1:MENU2;
- const u=getUser(e.senderID);
- const g=getGroup(e.threadID);
- const pre=g.prefix||GLOBAL_PREFIX;
- let lines=[`✨ iKON-BOT • MENU ${which}/2`,`👑 Aphecks iKon Klerk`,`💰 $${u.wallet} • ⭐ Lv.${u.level}`,`📌 Prefix: ${pre}`,`━━━━━━━━━━━━━━━━━━`];
- for(const [cat,str] of Object.entries(src)) lines.push(`${icon(cat)} ${title(cat)}: ${str.split(/\s+/).map(x=>pre+x).join(" • ")}`);
- lines.push(`━━━━━━━━━━━━━━━━━━`,`📖 ${pre}help <cmd> • ${pre}menu${which===1?"2":"1"}`);
- return lines.join("\n");
-}
+const builtins={
+ menu:{aliases:["help"],run:async({api,event,user,group,args,reply})=>reply(menu(user,group))},
+ commands:{aliases:["cmds"],run:async({reply,group})=>reply(`📋 COMMANDS\n${[...commands.keys()].map(x=>group.prefix+x).join(" • ")}`)},
+ search:{aliases:["findcmd"],run:async({reply,args,group})=>{const q=norm(args.join(" "));const a=commandList().filter(x=>x.includes(q));reply(a.length?`🔎 MATCHES\n${a.map(x=>group.prefix+x).join(" • ")}`:"❌ No matching command.")}},
+ profile:{aliases:["whois"],run:async({api,event,args,user,reply})=>{const uid=args[0]||event.senderID,p=await profile(api,uid);reply(`👤 PROFILE\n━━━━━━━━━━━━\n🆔 ${p.uid}\n📛 ${p.name}\n⭐ Level: ${getUser(uid).level||1}\n🔥 Prestige: ${getUser(uid).prestige||0}\n💰 $${Number(getUser(uid).wallet||0).toLocaleString()}\n🖼️ ${p.avatar?"Profile picture available":"No picture available"}`)}},
+ uid:{aliases:["myuid"],run:async({event,reply})=>reply(`🆔 UID: ${event.senderID}`)},
+ ping:{run:async({reply})=>reply(`🏓 PONG • iKON-BOT ONLINE\n⚡ ${Date.now()%1000}ms`)},
+ uptime:{run:async({reply})=>reply(`⏱️ Uptime: ${formatUptime(process.uptime())}`)},
+ botinfo:{run:async({reply})=>reply(`🤖 iKON-BOT\n📦 Modules: 12\n📋 Commands: ${commands.size}\n🔗 Aliases: ${aliases.size}\n⚡ Prefix: ${PREFIX}\n🟢 Status: ONLINE`)},
+ admin:{run:async({event,user,reply})=>reply(isAdmin(event.senderID,user)?`👑 GLOBAL ADMIN\n🆔 ${event.senderID}\n🔓 Full control enabled.`:"⛔ Admin permission required.")},
+ settings:{run:async({event,user,group,reply})=>reply(isAdmin(event.senderID,user)?`⚙️ SETTINGS\nPrefix: ${group.prefix}\nAutoReact: ${group.autoReact?"ON":"OFF"}\nWelcome: ${group.welcome?"ON":"OFF"}\nGoodbye: ${group.goodbye?"ON":"OFF"}\nAntiSpam: ${group.antiSpam?"ON":"OFF"}`:"⛔ Admin permission required.")},
+ enable:{run:async({event,user,args,reply})=>{if(!isAdmin(event.senderID,user))return reply("⛔ Admin permission required.");const x=norm(args[0]);if(!x)return reply("Usage: enable <command>");const g=groups.get(String(event.threadID));if(g?.disabledCommands)g.disabledCommands.delete(x);reply(`✅ Enabled: ${x}`)}},
+ disable:{run:async({event,user,args,reply})=>{if(!isAdmin(event.senderID,user))return reply("⛔ Admin permission required.");const x=norm(args[0]);if(!x)return reply("Usage: disable <command>");const g=groups.get(String(event.threadID));if(g)g.disabledCommands.add(x);reply(`🔒 Disabled: ${x}`)}},
+ reload:{run:async({event,user,reply})=>{if(!isAdmin(event.senderID,user))return reply("⛔ Admin permission required.");loadCommands();reply(`♻️ Reloaded\n📋 ${commands.size} commands\n🔗 ${aliases.size} aliases`)}}
+};
+for(const [name,c] of Object.entries(builtins)){if(commands.has(name)){console.log(`⚠️ Built-in skipped: ${name}`);continue}commands.set(name,{name,...c})}
+for(const [name,c] of Object.entries(builtins))for(const a of c.aliases||[]){const x=norm(a);if(!commands.has(x)&&!aliases.has(x))aliases.set(x,name)}
 
-// ===== BUILT-IN =====
-registerCommand({name:"menu",aliases:["m"],category:"SYSTEMHUB",run:async({api,event,args})=>{
- const g=getGroup(event.threadID); const pre=g.prefix;
- const n=args[0]; if(n==="1"||n==="2") return reply(api,event,menuPage(Number(n),event));
- await reply(api,event,menuPage(1,event)); setTimeout(()=>reply(api,event,menuPage(2,event)),600);
-}});
-registerCommand({name:"ping",category:"SYSTEMHUB",run:async({api,event})=>{ await reply(api,event,`🏓 PONG! ${Math.floor(Math.random()*200)}ms\n${fun()}`); }});
-registerCommand({name:"prefix",category:"SYSTEMHUB",run:async({api,event,args})=>{
- const g=getGroup(event.threadID);
- if(!args[0]) return reply(api,event,`🔧 Current prefix: ${g.prefix}\nUse: ${g.prefix}prefix <new>\nExample: ${g.prefix}prefix!`);
- g.prefix=args[0]; await reply(api,event,`✅ Prefix changed to: ${g.prefix}`);
-}});
-registerCommand({name:"botinfo",category:"SYSTEMHUB",run:async({api,event})=>{
- const g=getGroup(event.threadID); await reply(api,event,`🤖 iKON-BOT\n👑 Owner: Aphecks iKon Klerk\n📦 Commands: ${commands.size}\n📌 Prefix: ${g.prefix}\n👥 Users: ${users.size}\n⏱️ Uptime: ${Math.floor(process.uptime()/60)}m`);
-}});
+function formatUptime(s){s=Math.floor(s);const d=Math.floor(s/86400);s%=86400;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60),z=s%60;return`${d}d ${h}h ${m}m ${z}s`}
 
-// ===== PARSER WITH PREFIX PREFERENCE + REPLY TAG =====
-function parseMessage(body,groupPrefix,botID){
- if(!body) return null;
- let txt=body.trim();
+app.use(express.json({limit:"1mb"}));
+app.get("/",(q,s)=>s.json({status:"ACTIVE",bot:"iKON-BOT",commands:commands.size,aliases:aliases.size,groups:groups.size,uptime:formatUptime(process.uptime())}));
+app.get("/health",(q,s)=>s.json({ok:true,status:"ONLINE",commands:commands.size,uptime:process.uptime()}));
+app.listen(PORT,()=>console.log(`🌐 iKON-BOT server on ${PORT}`));
 
- // 1. Reply tag detection - if message starts with bot mention @
- // 2. Prefix preference: group prefix > global prefix
- const prefixes=[groupPrefix,GLOBAL_PREFIX].filter(Boolean);
- // Also allow no prefix if bot is mentioned or replied to
- const lower=txt.toLowerCase();
-
- // Check prefix
- let usedPrefix=null;
- for(const p of prefixes){
-  if(txt.startsWith(p)){ usedPrefix=p; txt=txt.slice(p.length).trim(); break; }
- }
- // If no prefix but message is reply to bot or mentions bot, allow it
- const isMention = botID && (lower.includes("@ikon") || lower.includes(botID));
- if(!usedPrefix &&!isMention) return null;
- if(!txt) return null;
-
- const parts=txt.match(/"[^"]*"|'[^']*'|\S+/g)||[];
- const name=(parts.shift()||"").toLowerCase();
- const args=parts.map(s=>s.replace(/^['"]|['"]$/g,""));
- return {name,args,usedPrefix};
-}
-
-async function handle(api,event){
- if(!event || event.type!=="message") return;
- if(!event.body) return;
-
- const g=getGroup(event.threadID,event.threadName||"Unknown");
- g.stats.messages++;
-
- console.log(`📩 ${event.threadID} | ${event.senderID}: ${event.body.slice(0,150)}`);
-
- // Always get user profile
- const prof=await getProfile(api,event.senderID);
- const u=getUser(event.senderID,prof.name);
- if(u.banned) return;
-
- // React to every message
- react(api,event);
-
- // Parse with group prefix preference + mention support
- const q=parseMessage(event.body,g.prefix,api.getCurrentUserID());
-
- // If not a command, check if it's a reply to bot (reply tag)
- if(!q){
-  // Reply tag: if user replies to bot's message, treat body as AI chat
-  if(event.messageReply && event.messageReply.senderID===api.getCurrentUserID()){
-   const aiCmd=commands.get("ai")||commands.get(aliases.get("ai"));
-   if(aiCmd && aiCmd.run){
-    console.log("-> REPLY TAG detected, triggering AI");
-    try{ await aiCmd.run({api,event,args:event.body.split(/\s+/),command:aiCmd,user:u,group:g,users,profile:getProfile,reply:(t)=>reply(api,event,t),react,fun,bar,isAdmin,PREFIX:g.prefix}); }catch(e){ console.error("AI reply tag error:",e); }
-   }
-  }
-  return;
- }
-
- console.log(`⚙️ CMD: ${q.name} | ARGS: ${q.args.join(" ")} | PREFIX: ${q.usedPrefix}`);
-
- const cmdName=aliases.get(q.name)||q.name;
- const cmd=commands.get(cmdName);
-
- if(!cmd){
-  console.log(`❓ Unknown: ${cmdName}`);
-  return reply(api,event,`❓ Unknown command: ${q.usedPrefix||g.prefix}${q.name}\n📜 Try ${g.prefix}menu`);
- }
-
- if(g.disabledCommands.has(cmdName)) return reply(api,event,`🚫 ${cmdName} disabled here`);
-
- // No cooldown for now to ensure reply
- try{
-  g.stats.commands++;
-  await cmd.run({
-   api,event,args:q.args,command:cmd,
-   user:u,group:g,users,groups,commands,aliases,
-   profile:getProfile,reply:(t)=>reply(api,event,t),react:(e)=>react(api,event,e),
-   bar,fun,isAdmin,PREFIX:g.prefix,apiRaw:api
+function loginBot(){
+ let state=APPSTATE;
+ try{if(typeof state==="string"&&state.trim().startsWith("["))state=JSON.parse(state);else if(typeof state==="string"&&fs.existsSync(state))state=JSON.parse(fs.readFileSync(state,"utf8"))}catch(e){console.log("⚠️ Appstate parse error:",e.message)}
+ login({appState:state},(err,api)=>{
+  if(err){console.log("❌ LOGIN ERROR:",err);setTimeout(loginBot,10000);return}
+  console.log("✅ LOGIN SUCCESSFUL");console.log("🤖 iKON-BOT connected");api.setOptions({listenEvents:true,selfListen:false,updatePresence:true});
+  api.listenMqtt(async(err,event)=>{
+   if(err){console.log("⚠️ MQTT:",err);return}
+   try{await onMessage(api,event)}catch(e){console.log("❌ EVENT ERROR:",e.stack||e)}
   });
-  console.log(`✅ Executed: ${cmdName}`);
- }catch(e){
-  console.error(`❌ CMD ${cmdName} ERROR:`,e);
-  reply(api,event,`⚠️ Error in ${cmdName}: ${e.message}`);
- }
+ });
 }
 
-function start(){
- if(!APPSTATE){ console.error("❌ APPSTATE missing in ENV"); return; }
- try{
-  const state=typeof APPSTATE==="string"?JSON.parse(APPSTATE):APPSTATE;
-  login({appState:state},(err,api)=>{
-   if(err){ console.error("❌ LOGIN FAILED:",err); return setTimeout(start,10000); }
-   console.log("✅ LOGIN SUCCESSFUL as",api.getCurrentUserID());
-   console.log(`📌 Global Prefix: ${GLOBAL_PREFIX}`);
-   console.log(`📦 Total Commands: ${commands.size} + ${aliases.size} aliases`);
-
-   api.setOptions({listenEvents:true,selfListen:false,updatePresence:true,forceLogin:false,autoMarkRead:false});
-
-   api.listenMqtt(async(err,event)=>{
-    if(err){ console.error("MQTT ERR:",err); return; }
-    try{ await handle(api,event); }catch(e){ console.error("HANDLE ERR:",e); }
-   });
-  });
- }catch(e){ console.error("START CRASH:",e); }
-}
-
-process.on("unhandledRejection",e=>console.error("UNHANDLED:",e));
-process.on("uncaughtException",e=>console.error("UNCAUGHT:",e));
-
-app.listen(PORT,()=>console.log(`🌐 HTTP ${PORT} LIVE`));
-start();
+async function onMessage(api,event){
+ if(!event||event.type!=="message"||!event.body)return;
+ const tid=String(event.threadID),sid=String(event.senderID||""),body=String(event.body||"").trim();
+ if(!sid||!tid)return;
+ const now=Date.now();
+ if(processed.has(event.messageID)&&now-processed.get(event.messageID)<60000)return;
+ if(event.messageID)processed.set(event.messageID,now);
+ if(processed.size>3000)for(const[k,v]of processed)if(now-v>60000)processed.delete(k);
+ let info={};try{info=await profile(api,sid)}catch{}
+ const user=getUser(sid,info.name),group=getGroup(tid,event.threadName||"Unknown Group");
+ group.stats.messages++;
+ user.name=info.name||user.name;user.firstName=info.firstName||user.firstName;user.profileUrl=info.profileUrl||user.profileUrl;user.avatar=info.avatar||user.avatar;
+ if(group.autoReact!==false&&AUTO_REACT){try{api.setMessageReaction(AUTO_REACT,event.messageID,()=>{},true)}catch{}}
+ const prefix=group.prefix||PREFIX;
+ if(!body.startsWith(prefix))return;
+ const parts=parse(body.slice(prefix.length).trim()),raw=norm(parts.shift());
+ if(!raw)return;
+ const name=commands.has(raw)?raw:aliases.get(raw);
+ if(!name)return;
+ const cmd=commands.get(name);
+ if(!cmd)return;
+ if(group.disabledCommands?.has(name))return reply(api,event,`🚫 ${name} is disabled in this group.`);
+ const key=`${sid}:${name}`,last=cooldowns.get(key)||0,cd=Number(cmd.cooldown||COOLDOWN);
+ if(now-last<cd)return reply(api,event,`⏳ Slow down bro 😎 Try again in ${((cd-(now-last))/1000).toFixed(1)}s.`);
+ cooldowns.set(key,now);
+ stat(name);group.stats.commands++;
+ const ctx={api,event,args:parts,body,user,group,profile:(uid)=>profile(api,uid),users,groups,commands,reply:t=>reply(api,event,t),fun:{formatNumber:n=>Number(n||0).toLocaleString(),random:(a,b)=>Math.floor(Math.random()*(b-a+1))+a,isAdmin:(uid)=>isAdmin(uid,getUser(uid))}};
+ try{await cmd.run(ctx)}catch(e){console.log(`❌ ${name}:`,e.stack||e);reply(api,event,"❌ Something went wrong while running that command.")}}
+process.on("uncaughtException",e=>console.log("❌ UNCAUGHT:",e.stack||e));
+process.on("unhandledRejection",e=>console.log("❌ REJECTION:",e));
+process.on("SIGTERM",()=>{console.log("🛑 SIGTERM");process.exit(0)});
+process.on("SIGINT",()=>{console.log("🛑 SIGINT");process.exit(0)});
+loginBot();
