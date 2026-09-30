@@ -1,0 +1,27 @@
+{
+  "name": "ikon-bot",
+  "version": "1.0.0",
+  "description": "iKON-BOT v5.0 Divine - modular Facebook bot for Render",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "keywords": [
+    "facebook",
+    "bot",
+    "mongodb",
+    "render"
+  ],
+  "author": "Aphecks",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.20.0",
+    "canvas": "^3.2.3",
+    "express": "^5.2.1",
+    "mongoose": "^8.24.4",
+    "ws3-fca": "^3.5.2"
+  }
+}
