@@ -1,1 +1,8 @@
-{"key":"casinoArcade","label":"Casino Arcade","emoji":"🎰","commandCount":50}
+{
+  "key": "casinoArcade",
+  "label": "🎰 ALL CASINO ARCADE GAMES",
+  "emoji": "🎰",
+  "glyph": "④",
+  "commandCount": 45,
+  "description": "45 playable arcade games, 15 slot symbols, 15 jackpot tiers."
+}

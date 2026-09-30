@@ -1,1 +1,8 @@
-{"key":"businessCryptoEstate","label":"Business, Crypto & Estate","emoji":"📈","commandCount":50}
+{
+  "key": "businessCryptoEstate",
+  "label": "🏢 ALL BUSINESS CRYPTO ESTATES",
+  "emoji": "🏢",
+  "glyph": "⑩",
+  "commandCount": 35,
+  "description": "16 businesses, 16 properties, 16 coins, 16 stocks, 16 upgrades."
+}

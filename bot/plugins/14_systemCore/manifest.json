@@ -1,1 +1,8 @@
-{"key":"systemCore","label":"System Core","emoji":"⚙️","commandCount":50}
+{
+  "key": "systemCore",
+  "label": "⚙️ ALL SYSTEM CORE",
+  "emoji": "⚙️",
+  "glyph": "⑭",
+  "commandCount": 20,
+  "description": "Bot control, plugin management, rules and support."
+}

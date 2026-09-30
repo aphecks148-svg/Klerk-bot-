@@ -1,1 +1,8 @@
-{"key":"levelRank","label":"Level & Rank","emoji":"🏆","commandCount":50}
+{
+  "key": "levelRank",
+  "label": "📈 ALL LEVELS & RANKS",
+  "emoji": "📈",
+  "glyph": "⑪",
+  "commandCount": 20,
+  "description": "16 ranks, 16 titles, 16 achievements, 25 quests, 16 badges."
+}

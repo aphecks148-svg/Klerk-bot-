@@ -1,1 +1,8 @@
-{"key":"adminPolice","label":"Admin Police","emoji":"🛡️","commandCount":50}
+{
+  "key": "adminPolice",
+  "label": "🛡️ ALL ADMIN POLICE CONTROLS",
+  "emoji": "🛡️",
+  "glyph": "⑤",
+  "commandCount": 20,
+  "description": "Group moderation: ban, mute, welcome, auto-add, lockdown, cleanup."
+}

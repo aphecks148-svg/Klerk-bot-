@@ -1,1 +1,8 @@
-{"key":"financeVault","label":"Finance Vault","emoji":"💰","commandCount":50}
+{
+  "key": "financeVault",
+  "label": "💰 ALL FINANCE VAULT LISTS",
+  "emoji": "💰",
+  "glyph": "②",
+  "commandCount": 40,
+  "description": "Earn, bank, borrow, invest, trade shares and grow a net worth."
+}

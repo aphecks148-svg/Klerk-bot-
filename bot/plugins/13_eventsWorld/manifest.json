@@ -1,1 +1,8 @@
-{"key":"eventsWorld","label":"Events & World","emoji":"🌍","commandCount":50}
+{
+  "key": "eventsWorld",
+  "label": "🌍 ALL WORLD EVENTS",
+  "emoji": "🌍",
+  "glyph": "⑬",
+  "commandCount": 25,
+  "description": "16 bosses, 16 map locations, 16 NPCs, 16 worlds."
+}

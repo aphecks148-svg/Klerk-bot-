@@ -1,191 +1,317 @@
-const { box } = require("./box");
+/**
+ * iKON-BOT command menu.
+ *
+ * There is deliberately **no box** here — the menu is plain Messenger text with
+ * styled headings, matching the format requested for every release:
+ *
+ *   Title     𝙄𝙆𝙊𝙉 𝙈𝘿 - 𝘼𝙇 𝙇𝙄𝙎𝙏𝙎
+ *   Headlines _*① ALL PETS & BEASTS_*
+ *   Bullets   ◦ .command
+ *   Footer    _Type .menu ①_
+ *
+ * One page per category, in the same order as the 14 plugin folders.
+ */
 
-const menuTemplates = {
-  menu1: {
-    emoji: "🐾",
-    title: "PET LABS & CREATURES",
-    subtitle: "Adopt, train, and care for divine pets 🐶🐱🦊",
-    sections: [
-      { header: "🐶 ADOPTION & BASICS", commands: ["!adopt [name] - Adopt a new pet", "!pet_list - Browse 50+ divine pets", "!petcard [name] - View pet details", "!petstats - Check your pet's stats", "!pet - Current pet info"] },
-      { header: "🍖 PET CARE", commands: ["!feed - Feed your pet (hunger -20%)", "!water - Give water (thirst -30%)", "!petheal - Heal your pet (HP +50)", "!petsafe - Lock pet in safe", "!petrename [name] - Rename pet"] },
-      { header: "💪 TRAINING & EVOLUTION", commands: ["!pettrain - Train your pet (+XP)", "!evolve - Evolve pet (Lv5+, 1000 coins)", "!petbattle - Battle with pet", "!battle - Battle opponent's pet", "!pokedex - Your caught pokemon"] },
-      { header: "🎮 POKEMON SYSTEM", commands: ["!catch - Catch wild pokemon", "!pokemon_list - All 151 pokemon", "!release - Release a pet", "!use - Use pet ability", "!give_pet [@user] - Gift pet to friend"] },
+const CATEGORY_GLYPHS = ["①", "②", "③", "④", "⑤", "⑥", "⑦",
+  "⑧", "⑨", "⑩", "⑪", "⑫", "⑬", "⑭"];
+
+/** The menu title, in the mathematical-styled glyphs used across the bot. */
+const MENU_TITLE = "𝙄𝙆𝙊𝙉 𝙈𝘿 - 𝘼𝙇 𝙇𝙄𝙎𝙏𝙎";
+
+/** Separator between pages of the full index. */
+const RULE = "━━━━━━━━━━━━━━━";
+
+/**
+ * The active command prefix.
+ *
+ * PREFIX comes from the environment, and some hosts (containers, CI, cron)
+ * export PREFIX as a filesystem path — which would render every bullet as
+ * "/data/usr/libexec/dog adopt". Only a short, non-path-like token is accepted.
+ */
+function activePrefix() {
+  const raw = String(process.env.PREFIX == null ? "" : process.env.PREFIX).trim();
+  if (!raw || raw.length > 2) return "!";
+  if (/[\s/\\.:]/.test(raw)) return "!";
+  return raw;
+}
+
+/**
+ * Per-category menu pages.
+ *   headline  — the styled `_① TITLE_` line
+ *   hint      — one-line description
+ *   commands  — the bullets shown on the page
+ */
+const MENU_PAGES = [
+  {
+    glyph: "①",
+    headline: "_*① ALL PETS & BEASTS_*",
+    hint: "50 pets across 7 rarities — adopt, train, evolve, battle.",
+    commands: [
+      ".adopt [pet]", ".pet", ".petlist", ".petcard [pet]", ".petstats [pet]",
+      ".pets", ".petrename [name]", ".petsell [pet]", ".petbuy [pet]", ".petmerge",
+      ".feed", ".water", ".play", ".petheal", ".pettrain",
+      ".evolve", ".petskill", ".petlevel", ".petxp", ".petluck",
+      ".catch", ".pokedex", ".release", ".petbattle", ".petduel",
+      ".pokemonlist", ".petspawn", ".pettrade", ".petgift", ".petcollection",
+      ".petcompare", ".pettop", ".pethelp", ".petinventory", ".petreset",
+      ".petrevive", ".petclone", ".petfavorite", ".petsellall", ".petbreed",
+      ".petarena", ".pettrainer", ".petbond", ".petrarity", ".petfull",
+      ".petfusion", ".petskin", ".petcage", ".petstamina", ".petfame",
     ],
-    cooldowns: "Feed: 30s | Water: 30s | Battle: 3s | Evolve: 1d",
-    tips: "💡 Tips: Feed pet to keep happiness up! Evolve increases HP & damage. Bank protects pets!",
   },
-  menu2: {
-    emoji: "💰",
-    title: "FINANCE VAULT & ECONOMY",
-    subtitle: "Earn, save, invest & grow your wealth 💸💵💎",
-    sections: [
-      { header: "💵 EARN COINS", commands: ["!daily - Daily reward (500 coins, 24h CD)", "!work - Work shift (100 coins, 30s CD)", "!weekly - Weekly bonus (1000 coins, 7d CD)", "!beg - Beg for coins (10-50 random)", "!farm - Farm crops (50 coins, 30s CD)"] },
-      { header: "🏦 BANKING", commands: ["!balance - Check wallet & bank", "!deposit [amount] - Save coins", "!withdraw [amount] - Take from bank", "!bank - Bank info & interest rates", "!vault - Vault protection details"] },
-      { header: "📈 INVESTING & MARKET", commands: ["!invest [amount] - Invest in stocks", "!stock - View stock portfolio", "!crypto - Crypto wallet", "!portfolio - Full investment report", "!rich - Richest users"] },
-      { header: "📋 ECONOMY", commands: ["!transfer [@user] [amount] - Send money", "!loan - Take a loan", "!tax - View tax bracket", "!networth - Total net worth", "!economy - Command guide"] },
+  {
+    glyph: "②",
+    headline: "_*② ALL FINANCE VAULT LISTS_*",
+    hint: "40 commands — earn, bank, borrow, invest, and grow.",
+    commands: [
+      ".balance", ".bank", ".wallet", ".cash", ".networth", ".rich",
+      ".deposit [amt]", ".withdraw [amt]", ".transfer @user [amt]", ".donate @user [amt]",
+      ".daily", ".weekly", ".work", ".beg", ".rob @user",
+      ".interest", ".vault", ".banklist", ".loan", ".repay [amt]",
+      ".loanlist", ".loanshop", ".buyshop", ".tax", ".taxlist",
+      ".invest [amt]", ".buyshares [name]", ".selshares [name]", ".transactions", ".price [name]",
+      ".richlist", ".auction", ".refund",
+      ".splitbill", ".tip @user [amt]", ".allowance", ".salary", ".claim", ".dailyquest",
+      ".financehelp",
     ],
-    cooldowns: "Daily: 24h | Weekly: 7d | Work/Farm/Beg: 30s | Transfer: 30s",
-    tips: "💡 Tips: Deposit in the bank for interest! Invest in stocks & crypto. Complete quests for bonus XP!",
   },
-  menu3: {
-    emoji: "🔫",
-    title: "CRIME GTA",
-    subtitle: "Heists, crimes & street racing 🚓💨",
-    sections: [
-      { header: "💀 CRIME JOBS", commands: ["!pickpocket - Steal wallets", "!shoplift - Grab & go", "!burglary - Break in", "!smuggling - Move goods", "!bankjob - Big score"] },
-      { header: "🚗 STREET RACING", commands: ["!garage - View your cars", "!carshop - Dealership", "!buycar [name] - Buy vehicle", "!sellcar [name] - Sell vehicle", "!race - Street race"] },
-      { header: "💥 HEISTS & CREW", commands: ["!heist - Heist menu", "!planheist [target] - Plan job", "!crew - Your crew", "!joinheist - Join a heist", "!startheist - Begin heist"] },
-      { header: "📊 UNDERWORLD", commands: ["!wanted - Wanted level", "!escape - Lose the cops", "!launder - Clean money", "!blackmarket - Black market", "!underworldrank - Crime rank"] },
+  {
+    glyph: "③",
+    headline: "_*③ ALL CRIME CITY LISTS_*",
+    hint: "40 commands — 16 jobs, 16 weapons, 16 cars, 16 gangs, 16 safehouses.",
+    commands: [
+      ".gta_jobs", ".gta [1-20]", ".gtalist", ".gtajoblist", ".gtaweaponlist",
+      ".gtacarlist", ".gtaganglist", ".gtasafehouselist", ".heist", ".getaway",
+      ".smuggle", ".carjack", ".pickpocket", ".fence", ".shoplift",
+      ".burglary", ".extortion", ".loanshark", ".armsdeal", ".counterfeit",
+      ".blackmarket", ".hijack", ".racket", ".tunnel", ".brassrun",
+      ".crownheist", ".crimeweapon", ".crimecar", ".safeshouse", ".wanted",
+      ".bust", ".bail", ".crimeboss", ".crimeshop", ".crimeleaderboard",
+      ".crimereputation", ".crimehelp", ".crimemission", ".crimequest", ".crimesafehouse",
     ],
-    cooldowns: "Crime jobs: 30s | Heist: 1m | Race: 30s",
-    tips: "💡 Tips: Plan heists with friends! Bigger crews = bigger payouts. Stay wanted low!",
   },
-  menu4: {
-    emoji: "🎰",
-    title: "CASINO ARCADE",
-    subtitle: "Luck, skill & high-stakes gambling 🃏🎲",
-    sections: [
-      { header: "🎰 CASINO GAMES", commands: ["!slots [bet] - Spin the reels", "!blackjack [bet] - 21", "!roulette [bet] [color] - Wheel", "!coinflip [bet] [call] - Heads/Tails", "!gamble [bet] - Quick bet"] },
-      { header: "🎲 DICE & CARDS", commands: ["!dice [bet] - Roll dice", "!poker [bet] - Draw poker", "!baccarat [bet] - Punto banco", "!crash - Multiplier crash", "!mines - Minefield"] },
-      { header: "💎 JACKPOT & LOTTERY", commands: ["!jackpot - Daily jackpot", "!lottery [ticket] - Buy ticket", "!scratch - Scratch card", "!spin - Wheel spin", "!casinostats - Casino stats"] },
-      { header: "📊 CASINO INFO", commands: ["!highroll [bet] - High roller", "!allin [bet] - Go all in", "!doubleup - Double or nothing", "!risk [bet] - Risky bet", "!safelay [bet] - Safe play"] },
+  {
+    glyph: "④",
+    headline: "_*④ ALL CASINO ARCADE GAMES_*",
+    hint: "45 commands — 45 arcade games, 15 slot symbols, 15 jackpot tiers.",
+    commands: [
+      ".slots [amt]", ".blackjack [amt]", ".roulette [amt]", ".coinflip [amt]",
+      ".dice [amt]", ".poker [amt]", ".crash", ".mines", ".wheel", ".jackpot",
+      ".baccarat", ".keno", ".hilo", ".doubleup", ".luck",
+      ".casino", ".gamelist", ".symbollist", ".jackpotlist", ".card",
+      ".shuffle", ".hit", ".stand", ".split", ".double",
+      ".insurance", ".bet", ".cashout", ".casino_daily", ".casino_weekly",
+      ".casino_stats", ".casino_rank", ".casino_leaderboard", ".casinohelp", ".houseedge",
+      ".bigsix", ".limo", ".odds", ".payouts", ".tourny",
+      ".carddeck", ".slotroll", ".rush", ".ripmode", ".jingle",
     ],
-    cooldowns: "Casino games: 3s | Daily bonus: 24h",
-    tips: "💡 Tips: The house always wins... but you can too! Check your casino stats with !casinostats.",
   },
-  menu5: {
-    emoji: "🛡️",
-    title: "ADMIN POLICE",
-    subtitle: "Server management & moderation 🚨👮",
-    sections: [
-      { header: "🛠️ MODERATION", commands: ["!ban [@user] - Ban user", "!unban [@user] - Unban user", "!kick [@user] - Kick user", "!mute [@user] - Mute user", "!warn [@user] - Warn user"] },
-      { header: "⚙️ ADMIN TOOLS", commands: ["!settings - Bot settings", "!plugin_reload [cat] - Reload plugin", "!plugin_disable [cat] - Disable plugin", "!plugin_enable [cat] - Enable plugin", "!set_prefix [char] - Change prefix"] },
-      { header: "📊 STATS & LOGS", commands: ["!view_users - User list", "!audit_log - Audit log", "!logs - System logs", "!backup_mongo - Backup DB", "!pending - Pending actions"] },
-      { header: "📡 SYSTEM", commands: ["!broadcast [msg] - Server announcement", "!maintenance [on/off] - Toggle maintenance", "!reload - Reload commands", "!shutdown - Shutdown bot", "!admin_help - Admin help"] },
+  {
+    glyph: "⑤",
+    headline: "_*⑤ ALL ADMIN POLICE CONTROLS_*",
+    hint: "20 commands — keep the group safe. Admin only.",
+    commands: [
+      ".admin", ".ban @user", ".unban @user", ".mute @user", ".unmute @user",
+      ".addadmin @user", ".removeadmin @user", ".tagall", ".kick @user", ".clear",
+      ".lockdown on|off", ".setwelcome [msg]", ".setleave [msg]", ".autoadd on|off",
+      ".onlyadminon", ".onlyadminoff", ".removeinactive", ".userinfo @user", ".adminhelp",
+      ".checkpol",
     ],
-    cooldowns: "Moderation: instant | Broadcast: 5m",
-    tips: "💡 Tips: Use !settings for admin configuration. Plugin reload doesn't require restart!",
   },
-  menu6: {
-    emoji: "⚔️",
-    title: "WARZONE BATTLE ARENA",
-    subtitle: "War, battles, PvP & clan wars ⚔️🛡️🔥",
-    sections: [
-      { header: "⚔️ COMBAT", commands: ["!war - War menu", "!fight [enemy] - Attack", "!duel [@user] - Duel player", "!raid - Raid boss", "!boss - Summon boss"] },
-      { header: "🛡️ GEAR & WEAPONS", commands: ["!weapon - Equip weapon", "!armor - Equip armor", "!shield - Equip shield", "!forge - Forge gear", "!enchant - Enchant gear"] },
-      { header: "👥 CLANS & SQUADS", commands: ["!clan - Clan menu", "!party - Form party", "!squad - Create squad", "!tournament - Join tournament", "!arena - Battle arena"] },
-      { header: "📊 WAR STATS", commands: ["!war_rank - War leaderboard", "!war_stats - War stats", "!battlepass - Battle pass", "!loot - Loot rewards", "!warhelp - War command help"] },
+  {
+    glyph: "⑥",
+    headline: "_*⑥ ALL WARZONE ARSENAL_*",
+    hint: "25 commands — 16 weapons, 16 loadouts, 16 vehicles, 16 missions, 16 bosses.",
+    commands: [
+      ".warzone", ".wzarsenal", ".weaponlist", ".loadoutlist", ".vehiclelist",
+      ".wzbosslist", ".deploy",
+      ".resupply", ".upgradeweapon", ".raid", ".hold", ".scout",
+      ".rescue", ".escort", ".sabotage", ".recover", ".ambush",
+      ".retreat", ".warzoneleaderboard", ".warzonestats", ".warzoneloadout", ".arsenal",
+      ".warzoneinventory", ".warzonerevive", ".wzrank",
     ],
-    cooldowns: "Combat: 3s | Raid: 1m | Tournament: 1h",
-    tips: "💡 Tips: Forge and enchant your gear! Join a clan for team bonuses!",
   },
-  menu7: {
-    emoji: "🤖",
-    title: "AI SYSTEMS & NEURALINK",
-    subtitle: "AI chat, image gen & smart assistance 🧠✨",
-    sections: [
-      { header: "🤖 AI CHAT & ASSIST", commands: ["!ai [prompt] - Ask iKON anything", "!ask [q] - Quick question", "!chat [msg] - Chat with AI", "!explain [topic] - Explain concept", "!summarize [text] - Summarize"] },
-      { header: "🎨 IMAGE GENERATION", commands: ["!imagine [prompt] - Generate image", "!image [prompt] - AI image", "!caption - Image caption", "!describe - Describe image", "!artist [style] - Art style"] },
-      { header: "💻 CODE & CREATIVE", commands: ["!code [request] - Generate code", "!debug [code] - Fix code", "!rewrite [text] - Rewrite", "!poem [topic] - Write poem", "!story [prompt] - Story"] },
-      { header: "🎮 GAMES & UTILITIES", commands: ["!quiz - Trivia quiz", "!trivia - Fun facts", "!riddle - Riddle me", "!weather [city] - Weather", "!translate [text] - Translate"] },
+  {
+    glyph: "⑦",
+    headline: "_*⑦ ALL AI SYSTEMS_*",
+    hint: "30 commands — 16 models, 16 personas, 16 prompt styles.",
+    commands: [
+      ".ai [prompt]", ".ask [question]", ".chat", ".imagine [prompt]", ".describe [image]",
+      ".translate [text]", ".summarize [text]", ".explain [topic]", ".rewrite [text]",
+      ".joke", ".story [prompt]", ".poem", ".sayit", ".roast @user",
+      ".persona", ".setpersona [name]", ".modellist", ".personalist", ".promptlist", ".aiclear",
+      ".aimodels", ".aisystem", ".dalle", ".remix", ".aivideo",
+      ".code [task]", ".debug [code]", ".regex [pattern]", ".aistats", ".aihelp",
     ],
-    cooldowns: "AI: 5s | Imagine: 5s | Quiz: 10s | Translate: 5s",
-    tips: "💡 Tips: Powered by Gemini 2.5 Flash! Requires GEMINI_KEY. Try !ai explain recursion to start!",
   },
-  menu8: {
-    emoji: "⛏️",
-    title: "GATHERING & SKILLS",
-    subtitle: "Farm, mine, hunt, fish & level up 🌾⛏️🎣",
-    sections: [
-      { header: "🌾 FARMING & CROPS", commands: ["!farm - Farm crops (+50 coins, +15 XP)", "!plant [crop] - Plant seeds", "!harvest - Harvest crops", "!water - Water plants", "!fertilize - Add fertilizer (+yield)"] },
-      { header: "⛏️ MINING & ORE", commands: ["!mine - Mine ore (+50 coins, +15 XP)", "!ore - Check ore types", "!ore_list - All ores (1-50)", "!dig - Dig for treasure", "!chop - Chop wood (+30 coins)"] },
-      { header: "🏹 HUNTING & FISHING", commands: ["!hunt - Hunt animals (+50 coins, +15 XP)", "!fish - Go fishing (+50 coins, +15 XP)", "!fish_list - All fish (1-50)", "!gather - Gather resources", "!forage - Forage for items (+30 coins)"] },
-      { header: "🧘 TRAINING & SKILLS", commands: ["!meditate - Meditation (+20 XP)", "!explore - Explore world", "!train - Train yourself", "!practice - Practice skill", "!workshop - Skill workshop"] },
+  {
+    glyph: "⑧",
+    headline: "_*⑧ ALL GATHERING RESOURCES_*",
+    hint: "20 commands — 16 crops, 16 ores, 16 fish, 16 animals, 16 trees.",
+    commands: [
+      ".farm", ".plant", ".harvest", ".croplist", ".irrigate",
+      ".mine", ".ore", ".orelist", ".dig", ".gem",
+      ".fish", ".catchfish", ".fishlist", ".bait", ".angler",
+      ".hunt", ".traphunt", ".animal", ".treelist", ".gatherhelp",
     ],
-    cooldowns: "Farm/Mine/Hunt/Fish: 30s | Forage: 30s | Meditate: 1m",
-    tips: "💡 Tips: Gathering gives coins & XP! Best way to level up. Multiple actions = more XP!",
   },
-  menu9: {
-    emoji: "❤️",
-    title: "SOCIAL & FUN INTERACTIONS",
-    subtitle: "Marry, kiss, hug & social games 💕👥🎉",
-    sections: [
-      { header: "💕 ROMANCE", commands: ["!marry [@user] - Propose marriage", "!divorce - Get divorced", "!couple - View couple status", "!couplecard - Beautiful couple card", "!crush [@user] - Declare a crush"] },
-      { header: "👋 PHYSICAL INTERACTIONS", commands: ["!kiss [@user] - Kiss someone 😘", "!hug [@user] - Hug someone 🤗", "!slap [@user] - Slap someone 👋", "!highfive [@user] - High five! 🖐️", "!pat [@user] - Pat someone 🤚"] },
-      { header: "❤️ SOCIAL STATUS", commands: ["!love [@user] - Express love", "!ship [@user] [@user2] - Ship two users", "!wave [@user] - Wave at someone", "!compliment [@user] - Compliment", "!flirt [@user] - Flirt with someone"] },
-      { header: "👥 FRIEND SYSTEM", commands: ["!friend [@user] - Add friend", "!unfriend [@user] - Remove friend", "!friends - Your friends list", "!follow [@user] - Follow user", "!unfollow [@user] - Unfollow user"] },
+  {
+    glyph: "⑨",
+    headline: "_*⑨ ALL SOCIAL FUN MOMENTS_*",
+    hint: "35 commands — 35 social actions, 35 group games, 15 jokes.",
+    commands: [
+      ".hug @user", ".kiss @user", ".handshake @user", ".highfive @user",
+      ".wave @user", ".bow", ".salute", ".dance",
+      ".pat @user", ".tickle @user", ".poke @user", ".blush",
+      ".shout", ".sing", ".pose", ".flex",
+      ".toast", ".confess", ".compliment @user", ".roastsocial @user", ".gossip",
+      ".socialactions", ".fun", ".truthordare", ".wyr", ".nhie", ".charades",
+      ".ttyl", ".riddle", ".8ball", ".fortune",
+      ".socialhelp", ".jokes", ".hugall", ".kissall",
     ],
-    cooldowns: "Kiss/Hug/Slap: 1s | Marry: instant | Divorce: 5m CD",
-    tips: "💡 Tips: Marriages are fun roleplay! Get paired profiles! Block users with !block",
   },
-  menu10: {
-    emoji: "💼",
-    title: "BUSINESS, CRYPTO & REAL ESTATE",
-    subtitle: "Start businesses, trade crypto, buy property 🏢📈🏠",
-    sections: [
-      { header: "🏢 BUSINESS MANAGEMENT", commands: ["!business - Start your business", "!business_list - All business types", "!company - Manage your company", "!startup [name] - Launch startup", "!hire [@user] - Hire employee"] },
-      { header: "💼 EMPLOYEE & PAYROLL", commands: ["!fire [@user] - Fire employee", "!employee - Employee info", "!payroll - Pay all employees", "!office - Upgrade office", "!upgrade_business - Upgrade stats"] },
-      { header: "📈 CRYPTO & STOCKS", commands: ["!crypto - Cryptocurrency wallet", "!stock - Stock market trading", "!buy_crypto [coin] [amount] - Buy crypto", "!sell_crypto [coin] [amount] - Sell crypto", "!portfolio - View investments"] },
-      { header: "🏡 REAL ESTATE", commands: ["!estate - Property portfolio", "!buyhouse - Buy a house", "!sellhouse - Sell property", "!rent - Rent property", "!mortgage - Take mortgage"] },
+  {
+    glyph: "⑩",
+    headline: "_*⑩ ALL BUSINESS CRYPTO ESTATES_*",
+    hint: "35 commands — 16 businesses, 16 properties, 16 coins, 16 stocks, 16 upgrades.",
+    commands: [
+      ".business", ".businesslist", ".buybusiness", ".businessinfo", ".takecash",
+      ".upgradebusiness", ".buybusinesslevel", ".businessstats", ".properties", ".propertylist",
+      ".buyproperty", ".propertyinfo", ".upgradeproperty", ".upgradelist", ".estate", ".networthestate",
+      ".crypto", ".cryptolist", ".buycrypto", ".sellcrypto", ".cryptoprice",
+      ".portfolio", ".stocks", ".stocklist", ".buystock", ".sellstock",
+      ".stockprice", ".dividend", ".market", ".estatehelp", ".broker",
+      ".offermarket", ".buyoffer", ".collectrent", ".rentincome",
     ],
-    cooldowns: "Business: 1h | Crypto: 5m | Estate: 30m",
-    tips: "💡 Tips: Build a business empire! Trade crypto & stocks. Buy your dream mansion! 💰",
   },
+  {
+    glyph: "⑪",
+    headline: "_*⑪ ALL LEVELS & RANKS_*",
+    hint: "20 commands — 16 ranks, 16 titles, 16 achievements, 25 quests, 16 badges.",
+    commands: [
+      ".level", ".xp", ".rank", ".ranklist", ".titlelist",
+      ".mytitle", ".settitle", ".achievement", ".achievementlist", ".badgelist",
+      ".quest", ".questlist", ".myquests", ".claimquest", ".xplog",
+      ".progress", ".levelup", ".prestige", ".rankleaderboard", ".levelhelp",
+    ],
+  },
+  {
+    glyph: "⑫",
+    headline: "_*⑫ ALL INVENTORY CRAFT LISTS_*",
+    hint: "25 commands — 16 weapons, 16 armour, 16 materials, 20 recipes.",
+    commands: [
+      ".inventory", ".weapon", ".wplist", ".armour", ".armourlist",
+      ".materiallist", ".recipelist", ".craft", ".brew", ".smelt",
+      ".equip", ".unequip", ".use", ".drop", ".sellitem",
+      ".buyitem", ".shop", ".gift @user", ".storage", ".weight",
+      ".iteminfo", ".loadout", ".enchant", ".upgradeitem", ".invhelp",
+    ],
+  },
+  {
+    glyph: "⑬",
+    headline: "_*⑬ ALL WORLD EVENTS_*",
+    hint: "25 commands — 16 bosses, 16 map locations, 16 NPCs, 16 worlds.",
+    commands: [
+      ".world", ".worldboss", ".bosslist", ".explore", ".map",
+      ".location", ".maplist", ".travel", ".npc", ".npclist",
+      ".worldlist", ".dimension", ".teleport", ".weather", ".time",
+      ".event", ".eventlist", ".dailEvent", ".weeklyevent", ".eventboss",
+      ".treasure", ".dungeon", ".portal", ".realm", ".announce",
+    ],
+  },
+  {
+    glyph: "⑭",
+    headline: "_*⑭ ALL SYSTEM CORE_*",
+    hint: "20 commands — bot control, plugin management, rules, and support.",
+    commands: [
+      ".menu", ".menu ①", ".commands", ".plugins", ".pluginreload",
+      ".pluginenable", ".plugindisable", ".commandcount", ".ping", ".uptime",
+      ".status", ".version", ".owner", ".invite", ".support",
+      ".rules", ".guide", ".language", ".timezone", ".systemhelp",
+    ],
+  },
+];
+
+/** The headline hint always states the real command count. */
+function hintFor(page) {
+  const count = page.commands.length;
+  if (page.baseHint) return `${page.baseHint} _(${count} commands)_`;
+  return `${count} commands.`;
+}
+
+/** The "here's everything" page — all 14 headlines, no bullets. */
+function renderIndex() {
+  const lines = [MENU_TITLE, ""];
+  for (const page of MENU_PAGES) {
+    lines.push(page.headline);
+    lines.push(`   ${hintFor(page)}`);
+  }
+  lines.push("");
+  lines.push(`_Type ${activePrefix()}menu ①_`);
+  return lines.join("\n");
+}
+
+/** A single category page. */
+function renderPage(pageNumber) {
+  const index = Math.max(1, Math.min(MENU_PAGES.length, Number(pageNumber) || 1)) - 1;
+  const page = MENU_PAGES[index];
+  const prefix = activePrefix();
+  const lines = [MENU_TITLE, "", page.headline, `   ${hintFor(page)}`, ""];
+  for (const command of page.commands) lines.push(`◦ ${prefix}${command.slice(1)}`);
+  lines.push("");
+  lines.push(RULE);
+  lines.push(`_Type ${prefix}menu ${page.glyph}_`);
+  return lines.join("\n");
+}
+
+/**
+ * Resolve a page argument. Accepts "3", "③", "menu3", "menu 3".
+ * Returns { index, glyph } or null.
+ */
+function parsePage(raw) {
+  if (raw == null || raw === "") return { index: 1, glyph: CATEGORY_GLYPHS[0] };
+  const text = String(raw).trim().toLowerCase();
+  const glyphIndex = CATEGORY_GLYPHS.indexOf(text);
+  if (glyphIndex >= 0) return { index: glyphIndex + 1, glyph: CATEGORY_GLYPHS[glyphIndex] };
+  const numeric = Number(text.replace(/^menu/, "").replace(/[^0-9]/g, ""));
+  if (Number.isFinite(numeric) && numeric >= 1 && numeric <= MENU_PAGES.length) {
+    return { index: numeric, glyph: CATEGORY_GLYPHS[numeric - 1] };
+  }
+  return null;
+}
+
+/** Full page list, used by `.guide` and the canvas menu renderer. */
+function getPages() {
+  return MENU_PAGES;
+}
+
+/** Look up a page by its category key (e.g. "petLabs"). */
+function getPageByKey(key) {
+  const map = {
+    petLabs: 1, financeVault: 2, crimeGta: 3, casinoArcade: 4,
+    adminPolice: 5, warzone: 6, aiSystems: 7, gather: 8, socialFun: 9,
+    businessCryptoEstate: 10, levelRank: 11, inventoryCraft: 12,
+    eventsWorld: 13, systemCore: 14,
+  };
+  const index = map[key];
+  return index ? MENU_PAGES[index - 1] : null;
+}
+
+/** Title + headline for a category key — used by the per-category help commands. */
+function categoryHeadline(key) {
+  const page = getPageByKey(key);
+  return page ? page.headline : `_${key}_`;
+}
+
+module.exports = {
+  MENU_TITLE,
+  MENU_PAGES,
+  CATEGORY_GLYPHS,
+  RULE,
+  renderIndex,
+  renderPage,
+  parsePage,
+  getPages,
+  getPageByKey,
+  categoryHeadline,
 };
-
-/**
- * Legacy text menu output — now cleaned up without ugly ASCII boxes.
- */
-function formatMenuOutput(pageNum) {
-  const page = Math.max(1, Math.min(10, pageNum || 1));
-  const menu = menuTemplates[`menu${page}`];
-  if (!menu) return null;
-
-  let output = "\n";
-  output += `  ✨ ${menu.emoji} ${menu.title} ${menu.emoji} ✨\n`;
-  output += `  📖 ${menu.subtitle}\n\n`;
-
-  menu.sections.forEach((section) => {
-    output += `${section.header}\n`;
-    output += `${"·".repeat(50)}\n`;
-    section.commands.forEach((cmd) => {
-      output += `  ${cmd}\n`;
-    });
-    output += "\n";
-  });
-
-  output += `⏱️  Cooldowns: ${menu.cooldowns}\n`;
-  output += `${menu.tips}\n\n`;
-  output += `📄 Page ${page}/10 | Use !menu [1-10] to navigate ✨\n`;
-  return output;
-}
-
-/**
- * Returns a chat-friendly boxed menu with emojis — no ugly ASCII borders.
- */
-function getMenuAsBox(pageNum) {
-  const page = Math.max(1, Math.min(10, pageNum || 1));
-  const menu = menuTemplates[`menu${page}`];
-  if (!menu) return null;
-
-  const lines = [];
-  lines.push(`${menu.emoji} ${menu.title.toUpperCase()} ${menu.emoji}`);
-  lines.push(`📖 ${menu.subtitle}`);
-  lines.push("");
-
-  menu.sections.forEach((section, idx) => {
-    lines.push(`▸ ${section.header}`);
-    section.commands.forEach((cmd) => lines.push(`  • ${cmd}`));
-    if (idx < menu.sections.length - 1) lines.push("");
-  });
-
-  lines.push("");
-  lines.push(`⏱️  ${menu.cooldowns}`);
-  lines.push(menu.tips);
-  lines.push("");
-  lines.push(`📄 MENU ${page}/10 | !menu [1-10] to navigate`);
-
-  return box(`${menu.emoji} iKON-BOT Command Menu ${page}/10`, lines);
-}
-
-module.exports = { menuTemplates, formatMenuOutput, getMenuAsBox };

@@ -1,1 +1,8 @@
-{"key":"warzone","label":"Warzone","emoji":"⚔️","commandCount":50}
+{
+  "key": "warzone",
+  "label": "💣 ALL WARZONE ARSENAL",
+  "emoji": "💣",
+  "glyph": "⑥",
+  "commandCount": 25,
+  "description": "16 weapons, 16 loadouts, 16 vehicles, 16 missions, 16 bosses."
+}

@@ -1,1 +1,8 @@
-{"key":"crimeGta","label":"Crime GTA","emoji":"🔫","commandCount":50}
+{
+  "key": "crimeGta",
+  "label": "🔫 ALL CRIME CITY LISTS",
+  "emoji": "🔫",
+  "glyph": "③",
+  "commandCount": 40,
+  "description": "16 jobs, 16 weapons, 16 cars, 16 gangs, 16 safehouses — a full crime ladder."
+}

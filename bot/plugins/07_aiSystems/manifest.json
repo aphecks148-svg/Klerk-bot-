@@ -1,1 +1,8 @@
-{"key":"aiSystems","label":"AI Systems","emoji":"🤖","commandCount":50}
+{
+  "key": "aiSystems",
+  "label": "🤖 ALL AI SYSTEMS",
+  "emoji": "🤖",
+  "glyph": "⑦",
+  "commandCount": 30,
+  "description": "16 models, 16 personas, 16 prompt styles — Gemini 2.5 Flash backed."
+}

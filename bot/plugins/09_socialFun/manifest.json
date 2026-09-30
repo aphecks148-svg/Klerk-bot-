@@ -1,1 +1,8 @@
-{"key":"socialFun","label":"Social Fun","emoji":"💞","commandCount":50}
+{
+  "key": "socialFun",
+  "label": "💞 ALL SOCIAL FUN MOMENTS",
+  "emoji": "💞",
+  "glyph": "⑨",
+  "commandCount": 35,
+  "description": "35 social actions, 35 group games, 15 jokes."
+}

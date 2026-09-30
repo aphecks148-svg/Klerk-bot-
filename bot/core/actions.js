@@ -1,434 +1,448 @@
+/**
+ * Built-in actions.
+ *
+ * These run *before* a plugin's own handler, so anything registered here takes
+ * precedence over a same-named plugin command. Kept deliberately small: the
+ * menu, the profile/balance surfaces, the money primitives, the AI bridge, and
+ * the global plugin switches.
+ *
+ * Group moderation lives in `05_adminPolice`, the arcade table games in
+ * `04_casinoArcade`, and the list/index commands in `14_systemCore` — do not
+ * re-add them here or they will shadow the plugin handlers.
+ */
+
+const path = require("path");
 const axios = require("axios");
-const { getRegistry, reloadPlugin, setPluginEnabled } = require("./loader");
 const { box } = require("../utils/box");
+const { reloadPlugin, setPluginEnabled, getRegistry } = require("./loader");
 const { getUser, adjustMoney, depositBank, withdrawBank, addXp } = require("../utils/economy");
-const { addAdmin, removeAdmin, muteUser, unmuteUser } = require("../utils/thread");
-const { getEmoji, getJoke, getMention, translate, getLyrics, getPinterest, getFootballUpdates } = require("../utils/helpers");
-const { models, isReady } = require("./mongo");
-const { PETS, findPet } = require("../data/pets");
-const { getMenuAsBox } = require("../utils/menuFormatter");
-const { setPrefix } = require("../utils/thread");
+const { isGlobalAdmin, setPrefix, unsendRecent } = require("../utils/group");
+const { getLyrics, getFootballUpdates } = require("../utils/helpers");
+const { renderPage, renderIndex, parsePage, MENU_TITLE, RULE } = require("../utils/menuFormatter");
+const { fmt, bar, titleCase, parseAmount } = require("../utils/format");
+const { findPet } = require("../data/pets");
 
-const adminIds = () => new Set(String(process.env.ADMIN_IDS || "").split(",").map((id) => id.trim()).filter(Boolean));
-const isAdmin = (id) => adminIds().has(String(id));
-const isThreadAdmin = (ctx) => isAdmin(ctx.event.senderID) || (ctx.thread && ctx.thread.admins && ctx.thread.admins.includes(ctx.event.senderID));
-
-// Gemini 2.5 Flash model endpoint
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-/**
- * Call Gemini 2.5 Flash API with a text prompt.
- * Returns the generated text response.
- */
-async function geminiCall(prompt, maxTokens = 1024) {
-  if (!process.env.GEMINI_KEY) throw new Error("GEMINI_KEY is not configured in environment variables 😅");
-  const response = await axios.post(GEMINI_URL, {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      temperature: 0.7,
-      topP: 0.95,
-    },
-  }, {
-    headers: { "x-goog-api-key": process.env.GEMINI_KEY, "Content-Type": "application/json" },
-    timeout: 15000,
-  });
-  const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Gemini returned an empty response 🤔");
-  return text.trim();
-}
-
-// Set of command names that are handled by the built-in actions.run dispatcher.
-// Commands NOT in this set will fall through to the plugin's default run handler.
+/** Commands handled here. Kept for diagnostics and for the `!commands` page. */
 const builtInCommands = new Set([
-  "menu", "help", "ping", "about", "version",
-  "profile", "me", "rank", "balance", "bal", "uid",
-  "daily", "claim", "work", "beg",
-  "deposit", "withdraw", "transfer", "rob",
-  "pet", "petlist", "adopt", "petcard", "petstats",
-  "battle", "petbattle", "duel",
-  "slots",
-  "ai", "ask", "gemini", "imagine", "image", "chat",
-  "admin", "settings", "config", "ban", "unban", "mute", "unmute",
-  "setprefix", "plugin_reload", "plugin_disable", "plugin_enable", "uptime",
+  "menu", "help", "commands", "ping", "about", "version", "uptime", "status",
+  "balance", "bal", "bank", "wallet", "cash", "networth", "profile", "me", "uid",
+  "deposit", "save", "withdraw", "get", "transfer", "rob",
+  "daily", "claim", "work", "beg", "pet", "pets", "petcard", "petstats", "adopt",
+  "battle", "petbattle", "duel", "slots",
+  // AI and translate are owned by 07_aiSystems; see the note above.
+  "lyrics", "football",
+  "setprefix", "unsend", "admin", "mute", "unmute", "clear", "tagall",
+  "plugin_reload", "plugin_disable", "plugin_enable",
 ]);
 
+/** Call Gemini. Returns generated text. */
+async function geminiCall(prompt, maxTokens = 1024) {
+  if (!process.env.GEMINI_KEY) throw new Error("GEMINI_KEY is not configured 😅");
+  const response = await axios.post(GEMINI_URL, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.8, topP: 0.95 },
+  }, {
+    headers: { "x-goog-api-key": process.env.GEMINI_KEY, "Content-Type": "application/json" },
+    timeout: 20000,
+  });
+  const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("Gemini returned an empty response");
+  return text;
+}
+
+/** The first real mention in the event, falling back to the sender. */
+function mentioned(ctx) {
+  const m = ctx.event.mentions;
+  if (m) {
+    const first = Object.keys(m)[0];
+    if (first) return first;
+  }
+  return ctx.args.find((a) => /^\d{5,}$/.test(a)) || null;
+}
+
 /**
- * Built-in command handler dispatcher.
- * Returns true if the command was handled, false otherwise.
+ * Dispatch. Returns true when handled, false to fall through to the plugin's
+ * own `run`.
  */
 async function run(ctx) {
-  const { name, args, command, thread } = ctx;
+  const { name, args, thread } = ctx;
+  const p = ctx.prefix || "!";
 
-  // Check admin-only commands
-  if (!isThreadAdmin(ctx) && thread.onlyAdminCmds && thread.onlyAdminCmds.includes(name)) {
-    ctx.send(box("🛑 Hold up, admin-only!", [
-      `Hey friend! 👋 The **${name}** command is reserved for group admins.`,
-      `Ask an admin to run it for you! 😊`,
-    ]));
-    return true;
-  }
+  /* ── Menu & info ─────────────────────────────────────────────────────── */
 
-  // 📋 MENU & INFO
-  if (name === "menu" || name === "help") {
-    const page = Math.max(1, Math.min(10, Number(args[0]) || 1));
-    ctx.send(getMenuAsBox(page));
+  if (name === "menu" || name === "help" || name === "commands") {
+    const page = parsePage(args[0]);
+    if (args[0] && !page) {
+      await ctx.send([
+        MENU_TITLE,
+        "",
+        "Pick a page from ① to ⑭:",
+        "",
+        renderIndex().split("\n").slice(2).join("\n"),
+        "",
+        RULE,
+        `_Type ${p}menu ①_`,
+      ].join("\n"));
+      return true;
+    }
+    await ctx.send(args[0] ? renderPage(page.index) : renderIndex());
     return true;
   }
 
   if (name === "ping") {
-    ctx.send(box("🏓 Pong!", [
-      `Hey there! 🤖 I'm alive and kicking!`,
-      `💫 iKON-BOT v5.0 Divine is online and ready to help!`,
-    ]));
+    const started = global.ikonBotStart || Date.now();
+    await ctx.send([
+      "🏓 Pong!",
+      `💫 iKON-BOT v5.0 Divine is online.`,
+      `⏱️ Up for ${fmt(Math.floor((Date.now() - started) / 1000))}s • ${getRegistry().totalCommands} commands.`,
+    ].join("\n"));
     return true;
   }
 
   if (name === "about" || name === "version") {
-    ctx.send(box("🤖 About iKON-BOT", [
-      `✨ iKON-BOT v5.0 Divine ✨`,
-      `Built with ❤️ by Aphecks`,
-      `Powered by ws3-fca • Express • MongoDB • Gemini 2.5 Flash`,
-      `Say hello to your friendly neighborhood bot! 😄`,
-    ]));
+    await ctx.send([
+      "🤖 About iKON-BOT",
+      "✨ iKON-BOT v5.0 Divine ✨",
+      "Built with ❤️ by Aphecks",
+      "ws3-fca • Express • MongoDB • Gemini 2.5 Flash",
+      `${getRegistry().categories.length} categories • ${getRegistry().totalCommands} commands`,
+    ].join("\n"));
     return true;
   }
 
-  // 👤 USER PROFILE
-  if (name === "profile" || name === "me" || name === "rank") {
-    const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    ctx.send(box("👤 Your Profile", [
-      `Name: ${ctx.profile.name}`,
-      `💰 Wallet: ${user.money} coins`,
-      `🏦 Bank: ${user.bank} coins`,
-      `⭐ Level: ${user.level}`,
-      `📈 XP: ${user.xp}/${user.level * 100}`,
-      `🆔 UID: ${user.uid}`,
-      `🐾 Pets: ${(user.pets || []).length}`,
-    ]));
+  if (name === "uptime" || name === "status") {
+    const started = global.ikonBotStart || Date.now();
+    const seconds = Math.floor((Date.now() - started) / 1000);
+    await ctx.send([
+      "⏱️ iKON-BOT Uptime",
+      `⏳ ${fmt(seconds)} seconds (${fmt(Math.floor(seconds / 60))} minutes)`,
+      `📦 ${getRegistry().totalCommands} commands across ${getRegistry().categories.length} categories`,
+      `💾 Mongo: ${require("./mongo").isReady() ? "connected" : "offline-safe"}`,
+    ].join("\n"));
     return true;
   }
 
-  if (name === "balance" || name === "bal") {
+  /* ── Identity & money ────────────────────────────────────────────────── */
+
+  if (name === "profile" || name === "me") {
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    ctx.send(box("💰 Your Balance", [
-      `💵 Wallet: ${user.money} coins`,
-      `🏦 Bank: ${user.bank} coins`,
-      `💎 Total: ${(user.money || 0) + (user.bank || 0)} coins`,
-    ]));
+    const level = user.level || 1;
+    const xp = user.xp || 0;
+    const need = level * 100;
+    await ctx.send([
+      `👤 ${user.name || ctx.profile.name}`,
+      `🆔 UID: ${user.uid || "—"}`,
+      `⭐ Level ${level}  ${bar(xp, need)} ${fmt(xp)}/${fmt(need)} XP`,
+      `💰 Wallet ${fmt(user.money || 0)} • 🏦 Bank ${fmt(user.bank || 0)}`,
+      `🐾 Pets ${(user.pets || []).length} • 🎒 Items ${(user.inventory || []).length}`,
+    ].join("\n"));
     return true;
   }
 
   if (name === "uid") {
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    ctx.send(box("🆔 Your UID", [user.uid || "Not assigned yet"]));
+    await ctx.send(`🆔 Your UID: ${user.uid || "—"}`);
     return true;
   }
 
-  // 💰 ECONOMY
-  if (name === "daily" || name === "claim") {
-    const amount = name === "daily" ? 500 : 250;
-    await adjustMoney(ctx.event.senderID, amount, ctx.profile.name);
+  // `! bal` and `!bal` both land here — the router already trimmed the prefix.
+  if (["balance", "bal", "wallet", "cash"].includes(name)) {
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    ctx.send(box("🎁 Daily Reward!", [
-      `Yay! 🎉 You claimed your daily reward of **${amount} coins**!`,
-      `💼 New balance: ${user.money} coins`,
-      `Come back tomorrow for more! 😊`,
-    ]));
+    await ctx.send([
+      "💰 Balance",
+      `👛 Wallet: ${fmt(user.money || 0)} coins`,
+      `🏦 Bank:   ${fmt(user.bank || 0)} coins`,
+      `💎 Net:    ${fmt((user.money || 0) + (user.bank || 0))} coins`,
+      thread && thread.bankProtection === false ? "⚠️ Bank protection is OFF in this group." : "🛡️ Bank protection is ON.",
+    ].join("\n"));
     return true;
   }
 
-  if (name === "work" || name === "beg") {
-    const amount = name === "work" ? 100 : Math.floor(Math.random() * 40) + 10;
-    await adjustMoney(ctx.event.senderID, amount, ctx.profile.name);
+  if (name === "bank" || name === "vault") {
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    const msg = name === "work" ? `You worked a shift and earned **${amount} coins**! 💼` : `People gave you **${amount} coins** because you looked cute! 🥺`;
-    ctx.send(box("💸 Cash earned!", [
-      msg,
-      `💰 New balance: ${user.money} coins`,
-    ]));
+    const tier = user.bank >= 1000000 ? "Divine" : user.bank >= 100000 ? "Platinum"
+      : user.bank >= 10000 ? "Gold" : user.bank >= 1000 ? "Silver" : "Bronze";
+    await ctx.send([
+      "🏦 Bank",
+      `💳 Balance: ${fmt(user.bank || 0)} coins`,
+      `🏅 Tier: ${tier}`,
+      `📈 Daily interest: ${fmt(Math.floor((user.bank || 0) * 0.01))} coins`,
+      `🛡️ Protection: ${thread && thread.bankProtection === false ? "OFF" : "ON"}`,
+      "",
+      `Deposit: ${p}deposit [amount]   Withdraw: ${p}withdraw [amount]`,
+    ].join("\n"));
     return true;
   }
 
-  if (name === "deposit") {
-    const amt = parseInt(args[0]) || 0;
-    if (amt <= 0) { ctx.send(box("⚠️ Oops!", ["Use: !deposit [amount] — I need a number! 🔢"])); return true; }
+  if (name === "networth") {
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    if ((user.money || 0) < amt) { ctx.send(box("💸 Not enough cash!", [`You only have ${user.money || 0} coins. Maybe try working or begging? 💼`])); return true; }
-    if (isReady()) await models.User.findOneAndUpdate({ facebookId: ctx.event.senderID }, { $set: { money: user.money - amt, bank: (user.bank || 0) + amt } });
-    else { user.money = (user.money || 0) - amt; user.bank = (user.bank || 0) + amt; }
-    const updated = await getUser(ctx.event.senderID, ctx.profile.name);
-    ctx.send(box("🏦 Deposit successful!", [
-      `📥 Saved **${amt} coins** into your bank!`,
-      `💵 Wallet: ${updated.money || 0} | 🏦 Bank: ${updated.bank || 0}`,
-    ]));
+    await ctx.send(`💎 Net worth: ${fmt((user.money || 0) + (user.bank || 0))} coins`);
     return true;
   }
 
-  if (name === "withdraw") {
-    const amt = parseInt(args[0]) || 0;
-    if (amt <= 0) { ctx.send(box("⚠️ Oops!", ["Use: !withdraw [amount] — I need a number! 🔢"])); return true; }
+  if (name === "deposit" || name === "save") {
+    const amount = parseAmount(args[0]);
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    if ((user.bank || 0) < amt) { ctx.send(box("🏦 Empty vault...", [`You only have ${user.bank || 0} coins in the bank. 💔`])); return true; }
-    if (isReady()) await models.User.findOneAndUpdate({ facebookId: ctx.event.senderID }, { $set: { money: (user.money || 0) + amt, bank: user.bank - amt } });
-    else { user.money = (user.money || 0) + amt; user.bank = (user.bank || 0) - amt; }
-    const updated = await getUser(ctx.event.senderID, ctx.profile.name);
-    ctx.send(box("💰 Withdrawal successful!", [
-      `📤 Withdrew **${amt} coins** from your bank!`,
-      `💵 Wallet: ${updated.money || 0} | 🏦 Bank: ${updated.bank || 0}`,
-    ]));
+    if (amount == null) { await ctx.send(`Usage: ${p}deposit [amount]`); return true; }
+    if (amount > (user.money || 0)) { await ctx.send(`💸 You only have ${fmt(user.money)} coins in your wallet.`); return true; }
+    await depositBank(ctx.event.senderID, amount, ctx.profile.name);
+    await ctx.send(`🏦 Deposited ${fmt(amount)} coins. New bank balance: ${fmt(user.bank + amount)}.`);
     return true;
   }
 
-  if (name === "transfer" && thread.enableTransfer !== false) {
-    const mentionId = getMention(ctx);
-    const amt = parseInt(args.find((arg) => /^-?\d+$/.test(arg)) || 0) || 0;
-    if (!mentionId || amt <= 0) { ctx.send(box("⚠️ Usage", ["!transfer [@user] [amount] — tag someone and enter an amount!"])); return true; }
-    const sender = await getUser(ctx.event.senderID, ctx.profile.name);
-    if ((sender.money || 0) < amt) { ctx.send(box("💸 Broke!", [`You need ${amt} coins but only have ${sender.money || 0}. Try working! 💼`])); return true; }
-    if (isReady()) {
-      await models.User.findOneAndUpdate({ facebookId: ctx.event.senderID }, { $inc: { money: -amt } });
-      await models.User.findOneAndUpdate({ facebookId: mentionId }, { $inc: { money: amt } });
-    } else {
-      sender.money = (sender.money || 0) - amt;
-      const target = await getUser(mentionId, "Facebook user");
-      target.money = (target.money || 0) + amt;
+  if (name === "withdraw" || name === "get") {
+    const amount = parseAmount(args[0]);
+    const user = await getUser(ctx.event.senderID, ctx.profile.name);
+    if (amount == null) { await ctx.send(`Usage: ${p}withdraw [amount]`); return true; }
+    if (thread && thread.bankProtection !== false && amount > (user.bank || 0)) {
+      await ctx.send(`🛡️ Bank protection: you only have ${fmt(user.bank)} in the bank.`);
+      return true;
     }
-    ctx.send(box("✅ Transfer complete!", [
-      `💸 Sent **${amt} coins** to your friend!`,
-      `They'll get a notification soon! 📩`,
-    ]));
+    if (amount > (user.bank || 0)) { await ctx.send(`🏦 You only have ${fmt(user.bank)} in the bank.`); return true; }
+    await withdrawBank(ctx.event.senderID, amount, ctx.profile.name);
+    await ctx.send(`👛 Withdrew ${fmt(amount)} coins. New wallet: ${fmt(user.money + amount)}.`);
+    return true;
+  }
+
+  if (name === "transfer" || name === "donate") {
+    const target = mentioned(ctx);
+    const amount = parseAmount(args.find((a) => /\d/.test(a)));
+    if (!target || amount == null) { await ctx.send(`Usage: ${p}${name} @user [amount]`); return true; }
+    const me = await getUser(ctx.event.senderID, ctx.profile.name);
+    if (target === String(ctx.event.senderID)) { await ctx.send("🙃 You can't pay yourself."); return true; }
+    if (amount > (me.money || 0)) { await ctx.send(`💸 You only have ${fmt(me.money)} coins.`); return true; }
+    const them = await getUser(target, "Facebook user");
+    await adjustMoney(ctx.event.senderID, -amount, ctx.profile.name);
+    await adjustMoney(target, amount, them.name);
+    await ctx.send(`💸 Sent ${fmt(amount)} coins to ${them.name || "them"}.`);
     return true;
   }
 
   if (name === "rob" && thread.enableRob !== false) {
-    const mentionId = getMention(ctx);
-    if (!mentionId) { ctx.send(box("🔫 Rob who?", ["Tag someone to rob! Use: !rob [@user]"])); return true; }
-    const victim = await getUser(mentionId, "Facebook user");
+    const target = mentioned(ctx);
+    if (!target) { await ctx.send(`🔫 Rob who? Tag someone: ${p}rob @user`); return true; }
+    const victim = await getUser(target, "Facebook user");
     const stolen = Math.floor((victim.money || 0) * 0.3);
-    if (stolen <= 0) { ctx.send(box("💸 Target is broke!", ["They have no money to steal! Maybe try being nice instead? 😅"])); return true; }
-    if (isReady()) {
-      await models.User.findOneAndUpdate({ facebookId: mentionId }, { $inc: { money: -stolen } });
-      await models.User.findOneAndUpdate({ facebookId: ctx.event.senderID }, { $inc: { money: stolen } });
-    } else {
-      victim.money = (victim.money || 0) - stolen;
-      const robber = await getUser(ctx.event.senderID, ctx.profile.name);
-      robber.money = (robber.money || 0) + stolen;
+    if (stolen <= 0) { await ctx.send("💸 They're broke — nothing to take. 😅"); return true; }
+    await adjustMoney(target, -stolen);
+    await adjustMoney(ctx.event.senderID, stolen, ctx.profile.name);
+    await ctx.send([
+      "🔫 Heist success!",
+      `🎯 You stole ${fmt(stolen)} coins from ${victim.name || "them"}.`,
+      "💨 Run before the cops notice!",
+    ].join("\n"));
+    return true;
+  }
+
+  if (name === "daily" || name === "claim") {
+    const user = await getUser(ctx.event.senderID, ctx.profile.name);
+    await adjustMoney(ctx.event.senderID, 500, ctx.profile.name);
+    await addXp(ctx.event.senderID, 25, ctx.profile.name);
+    await ctx.send([
+      "🎁 Daily reward claimed!",
+      "💰 +500 coins",
+      "⭐ +25 XP",
+      `💳 Wallet: ${fmt(user.money + 500)} coins`,
+    ].join("\n"));
+    return true;
+  }
+
+  if (name === "work") {
+    const user = await getUser(ctx.event.senderID, ctx.profile.name);
+    const pay = 100 + Math.floor(Math.random() * 200);
+    await adjustMoney(ctx.event.senderID, pay, ctx.profile.name);
+    await addXp(ctx.event.senderID, 10, ctx.profile.name);
+    await ctx.send([
+      "💼 Shift complete!",
+      `💰 +${fmt(pay)} coins`,
+      `💳 Wallet: ${fmt((user.money || 0) + pay)} coins`,
+    ].join("\n"));
+    return true;
+  }
+
+  if (name === "beg") {
+    const user = await getUser(ctx.event.senderID, ctx.profile.name);
+    const pay = 10 + Math.floor(Math.random() * 40);
+    await adjustMoney(ctx.event.senderID, pay, ctx.profile.name);
+    await ctx.send(`🙏 Someone gave you ${fmt(pay)} coins. Wallet: ${fmt((user.money || 0) + pay)}.`);
+    return true;
+  }
+
+  /* ── Pets ────────────────────────────────────────────────────────────── */
+
+  if (name === "pet" || name === "pets") {
+    const user = await getUser(ctx.event.senderID, ctx.profile.name);
+    const list = user.pets || [];
+    if (!list.length) {
+      await ctx.send(`🐾 You have no pets yet. Try **${p}adopt** to get one!`);
+      return true;
     }
-    ctx.send(box("🔫 Heist success!", [
-      `🎯 You stole **${stolen} coins**!`,
-      `💨 Run before the cops arrive!`,
-    ]));
-    return true;
-  }
-
-  // 🐾 PETS
-  if (name === "pet" || name === "petlist") {
-    const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    const petList = (user.pets || []).slice(0, 5);
-    const petInfo = petList.length > 0 ? petList.map((p, i) => `${i + 1}. ${p.name} - ${p.rarity} ⭐`).join("\n") : "No pets yet. Use !adopt to get one! 🐶";
-    ctx.send(box("🐾 Your Pets", [petInfo]));
-    return true;
-  }
-
-  if (name === "adopt") {
-    const petName = args[0] || "Divine Pet";
-    const pet = findPet(petName);
-    const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    user.pets = [...(user.pets || []), { ...pet, acquiredAt: new Date().toISOString(), name: petName }];
-    if (isReady()) await models.User.findOneAndUpdate({ facebookId: ctx.event.senderID }, { $set: { pets: user.pets } });
-    ctx.send(box("👑 New pet acquired! 🎉", [
-      `🐾 ${petName || pet.name}`,
-      `💎 Rarity: ${pet.rarity}`,
-      `⚔️ Power: ${pet.power}`,
-      `Welcome to the family! 🥰`,
-    ]));
+    const lines = list.slice(0, 10).map((pet, i) => {
+      const power = pet.power || 10;
+      return `  ${i + 1}. ${pet.emoji || "🐾"} ${pet.name} [${"■".repeat(Math.min(5, Math.ceil(power / 30)))}${"□".repeat(Math.max(0, 5 - Math.ceil(power / 30)))}] ${pet.rarity || "Common"}`;
+    });
+    await ctx.send([`🐾 Your pets (${list.length})`, ...lines].join("\n"));
     return true;
   }
 
   if (name === "petcard" || name === "petstats") {
-    const petName = args[0] || "Pup";
-    const pet = findPet(petName);
-    ctx.send(box("🐾 Pet Stats", [
-      `${pet.name} - ${pet.rarity}`,
-      `⚔️ Power: ${pet.power}`,
-      `❤️ HP: ${pet.hp}`,
-    ]));
+    const pet = findPet(args[0]);
+    if (!pet) { await ctx.send(`❓ No pet called "${args[0] || ""}". Use **${p}petlist** to see all 50.`); return true; }
+    await ctx.send([
+      `🐾 ${pet.emoji} ${pet.name}`,
+      `💎 Rarity: ${pet.rarity}  •  ⚔️ Power: ${pet.power}  [${"■".repeat(Math.min(10, Math.ceil(pet.power / 20)))}${"□".repeat(Math.max(0, 10 - Math.ceil(pet.power / 20)))}]`,
+      `❤️ HP: ${pet.hp}  •  🜁 Type: ${pet.type}`,
+      `📖 ${pet.lore}`,
+      `⚔️ Skills: ${pet.skills.map((s) => s.name).join(", ")}`,
+    ].join("\n"));
     return true;
   }
 
-  // ⚔️ BATTLE
-  if (name === "battle" || name === "petbattle" || name === "duel") {
-    const opponent = getMention(ctx);
-    if (!opponent) { ctx.send(box("⚔️ Battle who?", ["Tag someone to battle! Use: !battle [@user]"])); return true; }
-    ctx.send(box("⚔️ Let the battle begin!", [
-      `🥊 Fight! Reply with a number (1-4) to attack!`,
-      `May the odds be ever in your favor! 🍀`,
-    ]));
-    return true;
-  }
-
-  // 🎰 CASINO
-  if (name === "slots") {
-    const amt = parseInt(args[0]) || 0;
-    if (amt <= 0) { ctx.send(box("🎰 Slots", ["Use: !slots [amount] — place your bet! 💰"])); return true; }
+  if (name === "adopt") {
     const user = await getUser(ctx.event.senderID, ctx.profile.name);
-    if ((user.money || 0) < amt) { ctx.send(box("💸 Not enough cash!", [`You need ${amt} coins. Try !work or !daily! 💼`])); return true; }
-    const win = Math.random() > 0.6;
-    const payout = win ? amt * 2.5 : 0;
-    if (isReady()) await models.User.findOneAndUpdate({ facebookId: ctx.event.senderID }, { $inc: { money: payout - amt } });
-    else { const u = await getUser(ctx.event.senderID, ctx.profile.name); u.money = (u.money || 0) + payout - amt; }
-    ctx.send(box("🎰 Slots Result", [
-      win ? `🎉 LUCKY! You won **${payout} coins**! 🍀` : `😢 Better luck next time! You lost ${amt} coins.`,
-    ]));
+    const query = args.join(" ").trim();
+    const pet = findPet(query);
+    if (!pet) { await ctx.send(`❓ No pet called "${query}". Use **${p}petlist** to see all 50.`); return true; }
+    if ((user.pets || []).length >= 20) { await ctx.send("🐾 Your pet roster is full (20). Release one first."); return true; }
+    const owned = [...(user.pets || []), { ...pet, level: 1, xp: 0 }];
+    await setUserPets(ctx.event.senderID, owned);
+    await ctx.send([
+      `👑 ${pet.emoji} ${pet.name} joined you!`,
+      `💎 ${pet.rarity} • ⚔️ ${pet.power} • 🜁 ${pet.type}`,
+      `📖 ${pet.lore}`,
+    ].join("\n"));
     return true;
   }
 
-  // 🤖 AI — now with Gemini 2.5 Flash
-  if (name === "ai" || name === "ask" || name === "gemini") {
-    const prompt = args.join(" ") || "Hello!";
-    try {
-      const response = await geminiCall(`You are iKON-BOT, a friendly Discord-like messenger bot. Respond conversationally and with personality. User: ${prompt}`, 2048);
-      ctx.send(box("🤖 Gemini 2.5 Flash", [
-        `Hey! 👋 Here's what **Gemini 2.5 Flash** thinks:`,
-        ``,
-        response,
-      ]));
-    } catch (error) {
-      ctx.send(box("🤖 Gemini says:", [
-        `Oops! 😢 I couldn't reach Gemini 2.5 Flash.`,
-        `Error: ${error.message || "Something went wrong, try again!"}`,
-        `Make sure GEMINI_KEY is set in your environment! 🛠️`,
-      ]));
-    }
+  /* ── Battle & casino ─────────────────────────────────────────────────── */
+
+  if (name === "battle" || name === "petbattle" || name === "duel") {
+    const target = mentioned(ctx);
+    if (!target) { await ctx.send(`⚔️ Battle who? Tag someone: ${p}battle @user`); return true; }
+    const me = await getUser(ctx.event.senderID, ctx.profile.name);
+    const them = await getUser(target, "Facebook user");
+    const myPower = (me.pets || []).reduce((n, pet) => n + (pet.power || 10), 0) || 20;
+    const theirPower = (them.pets || []).reduce((n, pet) => n + (pet.power || 10), 0) || 20;
+    const roll = Math.random();
+    const win = myPower * roll > theirPower * Math.random();
+    await ctx.send([
+      "⚔️ Battle!",
+      `🧑 ${me.name}: ${fmt(myPower)} power`,
+      `🧑 ${them.name || "Opponent"}: ${fmt(theirPower)} power`,
+      win ? `🏆 You win! +30 XP` : "💀 You lost this round.",
+    ].join("\n"));
+    if (win) await addXp(ctx.event.senderID, 30, ctx.profile.name);
     return true;
   }
 
-  if (name === "imagine" || name === "image") {
-    const prompt = args.join(" ") || "a beautiful landscape";
-    ctx.send(box("🎨 Image generation", [
-      `Generating an image of: "${prompt}"`,
-      `🎨 Powered by Gemini 2.5 Flash! Coming right up! ✨`,
-    ]));
+  if (name === "slots") {
+    const bet = parseAmount(args[0]);
+    const user = await getUser(ctx.event.senderID, ctx.profile.name);
+    if (bet == null) { await ctx.send(`🎰 Usage: ${p}slots [amount]`); return true; }
+    if (bet > (user.money || 0)) { await ctx.send(`💸 You only have ${fmt(user.money)} coins.`); return true; }
+    const symbols = ["🍒", "🍋", "⭐", "💎", "👑"];
+    const reel = [0, 0, 0].map(() => symbols[Math.floor(Math.random() * symbols.length)]);
+    const triple = reel[0] === reel[1] && reel[1] === reel[2];
+    const payout = triple ? bet * 4 : 0;
+    await adjustMoney(ctx.event.senderID, payout - bet, ctx.profile.name);
+    await ctx.send([
+      "🎰 Slots",
+      `🎰 ${reel.join(" ")} 🎰`,
+      triple ? `🎉 TRIPLE! +${fmt(payout)} coins` : `🔸 No match. -${fmt(bet)} coins.`,
+      `💳 Wallet: ${fmt((user.money || 0) - bet + payout)} coins`,
+    ].join("\n"));
     return true;
   }
 
-  if (name === "chat") {
-    const message = args.join(" ") || "Hi!";
-    ctx.send(box("💬 Chat with iKON", [
-      `Hey there! 👋 You said: "${message}"`,
-      `I'm here to chat! What's on your mind? 💭`,
-    ]));
+  /* ── AI bridge ───────────────────────────────────────────────────────── */
+  //
+  // NOTE: the AI commands are NOT handled here. `07_aiSystems` owns ai / ask /
+  // chat / imagine / describe / translate / remix and routes every call through
+  // its own askGemini(), which applies the user's persona. Handling them here
+  // would shadow those handlers with a persona-less stub.
+
+  if (name === "lyrics") {
+    const song = args.join(" ");
+    if (!song) { await ctx.send(`🎵 Usage: ${p}lyrics [artist - song]`); return true; }
+    await ctx.send(await getLyrics(song.split("-")[0], song.split("-").slice(1).join("-") || song));
     return true;
   }
 
-  // 👑 ADMIN
-  if (name === "admin") {
-    if (!isAdmin(ctx.event.senderID)) {
-      ctx.send(box("⛔ Nope!", [`You're not an admin. Try asking nicely! 😊`]));
-      return true;
-    }
-    ctx.send(box("👑 Welcome, Admin!", [
-      `Access: GLOBAL ADMIN`,
-      `🛡️ Full bot controls enabled!`,
-      `What would you like to do today? 😎`,
-    ]));
+  if (name === "football") {
+    const res = await getFootballUpdates();
+    if (!res) { await ctx.send("⚽ Football updates need FOOTBALL_API_KEY configured."); return true; }
+    await ctx.send(["⚽ Live fixtures", ...res.map((f) => `  ${f}`)].join("\n"));
     return true;
   }
 
-  if (name === "settings" || name === "config") {
-    if (!isAdmin(ctx.event.senderID)) {
-      ctx.send(box("⛔ Nope!", [`Only admins can do that! 😉`]));
-      return true;
-    }
-    ctx.send(box("⚙️ Bot Settings", [
-      `📟 Prefix: ${process.env.PREFIX || "!"}`,
-      `💬 Replies: ON`,
-      `⚡ AutoReact: ON`,
-      `⏱️ Cooldown: ON`,
-      `🛡️ AntiSpam: ON`,
-      `🧩 Modules: ACTIVE`,
-    ]));
+  /* ── Group controls ──────────────────────────────────────────────────── */
+
+  if (name === "setprefix") {
+    if (!admin) { await ctx.send("🛑 Only admins can change the prefix."); return true; }
+    const next = (args[0] || "").trim();
+    if (!next || next.length > 2) { await ctx.send(`Usage: ${p}setprefix [1-2 chars]`); return true; }
+    await setPrefix(thread.threadId, next);
+    await ctx.send(`⚡ Prefix is now **${next}**`);
     return true;
   }
 
-  if (name === "ban" && isAdmin(ctx.event.senderID)) {
-    const mentionId = getMention(ctx);
-    if (!mentionId) { ctx.send(box("⚠️ Who to ban?", ["Tag a user to ban! Use: !ban [@user]"])); return true; }
-    if (isReady()) await models.User.findOneAndUpdate({ facebookId: mentionId }, { $set: { banned: true } });
-    ctx.send(box("🚫 User banned!", ["They've been removed from the server! 👋"]));
+  if (name === "unsend") {
+    const result = await unsendRecent(ctx.api, thread.threadId, 30000);
+    await ctx.send(result.unsent
+      ? `🧹 Pulled back ${result.unsent} recent message(s).`
+      : "🧹 Nothing recent to unsend.");
     return true;
   }
 
-  if (name === "unban" && isAdmin(ctx.event.senderID)) {
-    const mentionId = getMention(ctx);
-    if (!mentionId) { ctx.send(box("⚠️ Who to unban?", ["Tag a user to unban! Use: !unban [@user]"])); return true; }
-    if (isReady()) await models.User.findOneAndUpdate({ facebookId: mentionId }, { $set: { banned: false } });
-    ctx.send(box("✅ User unbanned!", ["They're back! Welcome back! 👋"]));
-    return true;
-  }
+  /* ── Plugin admin (global owner only) ────────────────────────────────── */
+  //
+  // NOTE: group moderation (ban, mute, welcome, auto-add, lockdown, cleanup)
+  // is deliberately NOT handled here. `05_adminPolice` owns those commands, and
+  // because the router runs this dispatcher first, handling them here would
+  // shadow the plugin's handlers with these weaker stubs.
 
-  if (name === "mute" && isAdmin(ctx.event.senderID)) {
-    const mentionId = getMention(ctx);
-    if (!mentionId) { ctx.send(box("🔇 Who to mute?", ["Tag a user to mute! Use: !mute [@user]"])); return true; }
-    await muteUser(ctx.event.threadID, mentionId);
-    ctx.send(box("🔇 User muted!", ["They can't chat for now. Shh! 🤫"]));
-    return true;
-  }
-
-  if (name === "unmute" && isAdmin(ctx.event.senderID)) {
-    const mentionId = getMention(ctx);
-    if (!mentionId) { ctx.send(box("🔊 Who to unmute?", ["Tag a user to unmute! Use: !unmute [@user]"])); return true; }
-    await unmuteUser(ctx.event.threadID, mentionId);
-    ctx.send(box("🔊 User unmuted!", ["They can chat again! Yay! 🎉"]));
-    return true;
-  }
-
-  if (name === "setprefix" && isAdmin(ctx.event.senderID)) {
-    const newPrefix = args[0];
-    if (!newPrefix) { ctx.send(box("⚡ Current prefix", [process.env.PREFIX || "!"])); return true; }
-    await setPrefix(ctx.event.threadID, newPrefix);
-    ctx.send(box("⚡ Prefix updated!", [`New prefix: **${newPrefix}**`]));
-    return true;
-  }
-
-  if (name === "plugin_reload" && isAdmin(ctx.event.senderID)) {
+  if (name === "plugin_reload" && isGlobalAdmin(ctx.event.senderID)) {
     const category = args[0];
-    if (!category) { ctx.send(box("⚠️ What to reload?", ["Use: !plugin_reload [category_name]"])); return true; }
+    if (!category) { await ctx.send(`Usage: ${p}plugin_reload [category]`); return true; }
     try {
-      reloadPlugin(require("path").join(__dirname, "..", "plugins"), category);
-      ctx.send(box("✅ Plugin reloaded!", [`Plugin **${category}** reloaded successfully! 🔄`]));
+      reloadPlugin(path.join(__dirname, "..", "plugins"), category);
+      await ctx.send(`✅ Plugin **${category}** reloaded. 🔄`);
     } catch (error) {
-      ctx.send(box("⚠️ Reload failed!", [error.message]));
+      await ctx.send(`⚠️ Reload failed: ${error.message}`);
     }
     return true;
   }
 
-  if (name === "plugin_disable" && isAdmin(ctx.event.senderID)) {
+  if (name === "plugin_disable" && isGlobalAdmin(ctx.event.senderID)) {
     const category = args[0];
-    if (!category) { ctx.send(box("⚠️ Which plugin?", ["Use: !plugin_disable [category_name]"])); return true; }
+    if (!category) { await ctx.send(`Usage: ${p}plugin_disable [category]`); return true; }
     setPluginEnabled(category, false);
-    ctx.send(box("🛑 Plugin disabled!", [`Plugin **${category}** is now offline! ⚡`]));
+    await ctx.send(`🛑 **${category}** is now offline.`);
     return true;
   }
 
-  if (name === "plugin_enable" && isAdmin(ctx.event.senderID)) {
+  if (name === "plugin_enable" && isGlobalAdmin(ctx.event.senderID)) {
     const category = args[0];
-    if (!category) { ctx.send(box("⚠️ Which plugin?", ["Use: !plugin_enable [category_name]"])); return true; }
+    if (!category) { await ctx.send(`Usage: ${p}plugin_enable [category]`); return true; }
     setPluginEnabled(category, true);
-    ctx.send(box("✅ Plugin enabled!", [`Plugin **${category}** is back online! 🚀`]));
+    await ctx.send(`✅ **${category}** is back online.`);
     return true;
   }
 
-  if (name === "uptime") {
-    const uptime = Math.floor((Date.now() - (global.ikonBotStart || Date.now())) / 1000);
-    ctx.send(box("⏱️ iKON-BOT Uptime", [`Hey! 🤖 I've been online for **${uptime} seconds**! 💪`, `iKON-BOT v5.0 Divine — running strong! 🔥`]));
-    return true;
-  }
-
-  // Command not handled by built-in actions — let the plugin's run handler take over
   return false;
 }
 
-module.exports = { run, geminiCall, GEMINI_MODEL, builtInCommands };
+/** Persist a user's pet roster. */
+async function setUserPets(facebookId, pets) {
+  const { models, isReady } = require("./mongo");
+  if (isReady()) return models.User.findOneAndUpdate({ facebookId }, { $set: { pets } }, { new: true });
+  const { getUser } = require("../utils/economy");
+  const user = await getUser(facebookId);
+  user.pets = pets;
+  return user;
+}
+
+module.exports = { run, geminiCall, GEMINI_MODEL, builtInCommands, mentioned, setUserPets };

@@ -1,1 +1,8 @@
-{"key":"gather","label":"Gather & Farm","emoji":"🌾","commandCount":50}
+{
+  "key": "gather",
+  "label": "🌾 ALL GATHERING RESOURCES",
+  "emoji": "🌾",
+  "glyph": "⑧",
+  "commandCount": 20,
+  "description": "16 crops, 16 ores, 16 fish, 16 animals, 16 trees, 16 nodes."
+}

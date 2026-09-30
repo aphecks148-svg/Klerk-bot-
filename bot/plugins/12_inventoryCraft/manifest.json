@@ -1,1 +1,8 @@
-{"key":"inventoryCraft","label":"Inventory & Craft","emoji":"🎒","commandCount":50}
+{
+  "key": "inventoryCraft",
+  "label": "🎒 ALL INVENTORY CRAFT LISTS",
+  "emoji": "🎒",
+  "glyph": "⑫",
+  "commandCount": 25,
+  "description": "16 weapons, 16 armour, 16 materials, 20 recipes."
+}

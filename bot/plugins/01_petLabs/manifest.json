@@ -1,1 +1,8 @@
-{"key":"petLabs","label":"Pet Labs","emoji":"🐾","commandCount":50}
+{
+  "key": "petLabs",
+  "label": "🐾 ALL PETS & BEASTS",
+  "emoji": "🐾",
+  "glyph": "①",
+  "commandCount": 50,
+  "description": "Adopt, train, evolve and battle 50 hand-authored pets across 7 rarities."
+}
