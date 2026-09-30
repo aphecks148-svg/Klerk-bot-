@@ -3,8 +3,13 @@ node_modules/
 .env.*
 !.env.example
 *.log
-data/
 appstate.json
 .replit
 .upm/
 .cache/
+
+# bot/data holds the game data the 14 plugins require at load time.
+# The bare `data/` pattern above would match it at any depth, so re-include
+# it explicitly — if this is ever dropped, the bot fails to start.
+!bot/data/
+!bot/data/**
